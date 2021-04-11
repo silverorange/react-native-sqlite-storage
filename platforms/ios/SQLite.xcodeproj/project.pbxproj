@@ -7,6 +7,15 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3AAB7C132622807B0094BA82 /* fts5.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AAB7C0C2622807A0094BA82 /* fts5.c */; };
+		3AAB7C142622807B0094BA82 /* synonyms.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AAB7C0D2622807A0094BA82 /* synonyms.c */; };
+		3AAB7C152622807B0094BA82 /* debug.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C0E2622807A0094BA82 /* debug.h */; };
+		3AAB7C162622807B0094BA82 /* synonyms.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C0F2622807A0094BA82 /* synonyms.h */; };
+		3AAB7C172622807B0094BA82 /* fts5.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C102622807A0094BA82 /* fts5.h */; };
+		3AAB7C182622807B0094BA82 /* stop-words.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C112622807B0094BA82 /* stop-words.h */; };
+		3AAB7C192622807B0094BA82 /* stop-words.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AAB7C122622807B0094BA82 /* stop-words.c */; };
+		3AAB7C1C262280880094BA82 /* utarray.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C1B262280880094BA82 /* utarray.h */; };
+		3AAB7C1F2622808D0094BA82 /* uthash.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C1E2622808D0094BA82 /* uthash.h */; };
 		C7DCD6E41BE0295900F3300E /* SQLite.h in Headers */ = {isa = PBXBuildFile; fileRef = C7DCD6E21BE0295900F3300E /* SQLite.h */; };
 		C7DCD6E51BE0295A00F3300E /* SQLite.m in Sources */ = {isa = PBXBuildFile; fileRef = C7DCD6E31BE0295900F3300E /* SQLite.m */; };
 		C7DCD7141BE2D5DE00F3300E /* SQLiteResult.m in Sources */ = {isa = PBXBuildFile; fileRef = C7DCD7131BE2D5DE00F3300E /* SQLiteResult.m */; };
@@ -25,6 +34,15 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3AAB7C0C2622807A0094BA82 /* fts5.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = fts5.c; sourceTree = "<group>"; };
+		3AAB7C0D2622807A0094BA82 /* synonyms.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = synonyms.c; sourceTree = "<group>"; };
+		3AAB7C0E2622807A0094BA82 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = debug.h; sourceTree = "<group>"; };
+		3AAB7C0F2622807A0094BA82 /* synonyms.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = synonyms.h; sourceTree = "<group>"; };
+		3AAB7C102622807A0094BA82 /* fts5.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fts5.h; sourceTree = "<group>"; };
+		3AAB7C112622807B0094BA82 /* stop-words.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "stop-words.h"; sourceTree = "<group>"; };
+		3AAB7C122622807B0094BA82 /* stop-words.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = "stop-words.c"; sourceTree = "<group>"; };
+		3AAB7C1B262280880094BA82 /* utarray.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = utarray.h; sourceTree = "<group>"; };
+		3AAB7C1E2622808D0094BA82 /* uthash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = uthash.h; sourceTree = "<group>"; };
 		C7DCD6E21BE0295900F3300E /* SQLite.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SQLite.h; sourceTree = "<group>"; };
 		C7DCD6E31BE0295900F3300E /* SQLite.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SQLite.m; sourceTree = "<group>"; };
 		C7DCD7131BE2D5DE00F3300E /* SQLiteResult.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = SQLiteResult.m; sourceTree = "<group>"; };
@@ -50,6 +68,15 @@
 				C7DCD6E31BE0295900F3300E /* SQLite.m */,
 				C7DCD7151BE2D61E00F3300E /* SQLiteResult.h */,
 				C7DCD7131BE2D5DE00F3300E /* SQLiteResult.m */,
+				3AAB7C0E2622807A0094BA82 /* debug.h */,
+				3AAB7C0C2622807A0094BA82 /* fts5.c */,
+				3AAB7C102622807A0094BA82 /* fts5.h */,
+				3AAB7C122622807B0094BA82 /* stop-words.c */,
+				3AAB7C112622807B0094BA82 /* stop-words.h */,
+				3AAB7C0D2622807A0094BA82 /* synonyms.c */,
+				3AAB7C0F2622807A0094BA82 /* synonyms.h */,
+				3AAB7C1B262280880094BA82 /* utarray.h */,
+				3AAB7C1E2622808D0094BA82 /* uthash.h */,
 			);
 			name = SQLite;
 			sourceTree = "<group>";
@@ -79,6 +106,12 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3AAB7C182622807B0094BA82 /* stop-words.h in Headers */,
+				3AAB7C162622807B0094BA82 /* synonyms.h in Headers */,
+				3AAB7C152622807B0094BA82 /* debug.h in Headers */,
+				3AAB7C1C262280880094BA82 /* utarray.h in Headers */,
+				3AAB7C172622807B0094BA82 /* fts5.h in Headers */,
+				3AAB7C1F2622808D0094BA82 /* uthash.h in Headers */,
 				C7DCD6E41BE0295900F3300E /* SQLite.h in Headers */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -123,6 +156,7 @@
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
+				English,
 				en,
 			);
 			mainGroup = E23D7B3E1ACEFE2A00C59171;
@@ -140,8 +174,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3AAB7C192622807B0094BA82 /* stop-words.c in Sources */,
 				C7DCD7141BE2D5DE00F3300E /* SQLiteResult.m in Sources */,
+				3AAB7C132622807B0094BA82 /* fts5.c in Sources */,
 				C7DCD6E51BE0295A00F3300E /* SQLite.m in Sources */,
+				3AAB7C142622807B0094BA82 /* synonyms.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
