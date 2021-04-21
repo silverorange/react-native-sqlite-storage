@@ -128,7 +128,3 @@ int stop_words_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
   return p->tokenizer.xTokenize(p->pTokenizer, (void *)&sCtx, flags, pText,
                                 nText, stop_words_tokenize_callback);
 }
-
-fts5_tokenizer stop_words_tokenizer = {stop_words_tokenizer_create,
-                                       stop_words_tokenizer_delete,
-                                       stop_words_tokenizer_tokenize};

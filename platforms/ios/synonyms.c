@@ -339,7 +339,3 @@ int synonyms_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
   return p->tokenizer.xTokenize(p->pTokenizer, (void *)&sCtx, flags, pText,
                                 nText, synonyms_tokenize_callback);
 }
-
-fts5_tokenizer synonyms_tokenizer = {synonyms_tokenizer_create,
-                                     synonyms_tokenizer_delete,
-                                     synonyms_tokenizer_tokenize};

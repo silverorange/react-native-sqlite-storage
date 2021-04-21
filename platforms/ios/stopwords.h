@@ -18,6 +18,5 @@ int stop_words_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
                                   int (*xToken)(void *, int, const char *,
                                                 int nToken, int iStart,
                                                 int iEnd));
-fts5_tokenizer stop_words_tokenizer;
 
 #endif

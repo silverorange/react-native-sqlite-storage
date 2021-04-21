@@ -264,6 +264,12 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
           synonyms_context_create(db, ftsApi, &synonymsContext);
           RCTLog(@"Created synonyms context.");
 
+          static fts5_tokenizer synonyms_tokenizer = {
+            .xCreate = synonyms_tokenizer_create,
+            .xDelete = synonyms_tokenizer_delete,
+            .xTokenize = synonyms_tokenizer_tokenize
+          };
+
           // Register synonyms tokeinzer.
           if (ftsApi->xCreateTokenizer(ftsApi, "synonyms", (void *)synonymsContext, &synonyms_tokenizer, 0) != SQLITE_OK) {
             NSString *msg = @"Unable to create synonyms tokenizer";
@@ -273,6 +279,12 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
             sqlite3_close(db);
             return;
           }
+
+          static fts5_tokenizer stop_words_tokenizer = {
+            .xCreate = stop_words_tokenizer_create,
+            .xDelete = stop_words_tokenizer_delete,
+            .xTokenize = stop_words_tokenizer_tokenize
+          };
 
           // Register stopwords tokenizer.
           StopWordsTokenizerCreateContext *stopWordsContext = NULL;
