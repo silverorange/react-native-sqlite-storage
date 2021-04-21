@@ -10,8 +10,8 @@ struct StopWordsTokenizer {
   Fts5Tokenizer *pTokenizer; /* Parent tokenizer instance */
 };
 
-typedef struct CallbackContext CallbackContext;
-struct CallbackContext {
+typedef struct StopWordsCallbackContext StopWordsCallbackContext;
+struct StopWordsCallbackContext {
   void *pCtx;
   int (*xToken)(void *, int, const char *, int, int, int);
   int flags;
@@ -33,7 +33,9 @@ void stop_words_tokenizer_delete(Fts5Tokenizer *pTok) {
 int stop_words_tokenizer_create(void *pCtx, const char **azArg, int nArg,
                                 Fts5Tokenizer **ppOut) {
   log_debug("\ncreating stop-words tokenizer\n\n");
-  StopWordsTokenizerCreateContext *pCreateCtx = (StopWordsTokenizerCreateContext *)pCtx;
+  StopWordsTokenizerCreateContext *pCreateCtx =
+      (StopWordsTokenizerCreateContext *)pCtx;
+
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
   StopWordsTokenizer *pRet;
   const char *zBase = STOP_WORDS_DEFAULT_PARENT_TOKENIZER;
@@ -84,7 +86,8 @@ const char *const azStopWords[] = {
 static int is_stop_word(const char *pToken, int nToken) {
   const int nLength = sizeof(azStopWords) / sizeof(azStopWords[0]);
   // Token strings may or may-not be null-terminated
-  const size_t nTokenLength = pToken[nToken - 1] == '\0' ? strlen(pToken) : nToken;
+  const size_t nTokenLength =
+      pToken[nToken - 1] == '\0' ? strlen(pToken) : nToken;
 
   for (int i = 0; i < nLength; i++) {
     if (strlen(azStopWords[i]) == nTokenLength &&
@@ -101,7 +104,7 @@ static int is_stop_word(const char *pToken, int nToken) {
 static int stop_words_tokenize_callback(void *pCtx, int tflags,
                                         const char *pToken, int nToken,
                                         int iStart, int iEnd) {
-  CallbackContext *p = (CallbackContext *)pCtx;
+  StopWordsCallbackContext *p = (StopWordsCallbackContext *)pCtx;
 
   if (is_stop_word(pToken, nToken) == 1) {
     return SQLITE_OK;
@@ -116,7 +119,7 @@ int stop_words_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
                                                 int nToken, int iStart,
                                                 int iEnd)) {
   StopWordsTokenizer *p = (StopWordsTokenizer *)pTokenizer;
-  CallbackContext sCtx;
+  StopWordsCallbackContext sCtx;
 
   sCtx.xToken = xToken;
   sCtx.pCtx = pCtx;

@@ -13,8 +13,8 @@ struct SynonymsTokenizer {
   SynonymsHash *pSynonymsHash; /* hash-table of loaded synonyms */
 };
 
-typedef struct CallbackContext CallbackContext;
-struct CallbackContext {
+typedef struct SynonymsCallbackContext SynonymsCallbackContext;
+struct SynonymsCallbackContext {
   void *pCtx;
   int (*xToken)(void *, int, const char *, int, int, int);
   int flags;
@@ -279,7 +279,7 @@ int synonyms_tokenizer_create(void *pCtx, const char **azArg, int nArg,
 static int synonyms_tokenize_callback(void *pCtx, int tflags,
                                       const char *pToken, int nToken,
                                       int iStart, int iEnd) {
-  CallbackContext *p = (CallbackContext *)pCtx;
+  SynonymsCallbackContext *p = (SynonymsCallbackContext *)pCtx;
 
   // create synonyms in queries
   if (p->flags == FTS5_TOKENIZE_QUERY) {
@@ -329,7 +329,7 @@ int synonyms_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
                                               int nToken, int iStart,
                                               int iEnd)) {
   SynonymsTokenizer *p = (SynonymsTokenizer *)pTokenizer;
-  CallbackContext sCtx;
+  SynonymsCallbackContext sCtx;
 
   sCtx.pSynonymsHash = p->pSynonymsHash;
   sCtx.xToken = xToken;
