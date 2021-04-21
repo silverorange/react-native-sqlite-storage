@@ -1,4 +1,4 @@
-#include "stop-words.h"
+#include "stopwords.h"
 #include "debug.h"
 #include <sqlite3.h>
 #include <stdio.h>

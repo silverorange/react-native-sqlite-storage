@@ -19,7 +19,7 @@
 #import "SQLiteResult.h"
 
 #import "fts5.h"
-#import "stop-words.h"
+#import "stopwords.h"
 #import "synonyms.h"
 
 #import <React/RCTLog.h>
