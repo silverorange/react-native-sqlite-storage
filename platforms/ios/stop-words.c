@@ -10,11 +10,6 @@ struct StopWordsTokenizer {
   Fts5Tokenizer *pTokenizer; /* Parent tokenizer instance */
 };
 
-typedef struct CreateContext CreateContext;
-struct CreateContext {
-  fts5_api *pFts5Api; /* fts5 api */
-};
-
 typedef struct CallbackContext CallbackContext;
 struct CallbackContext {
   void *pCtx;
@@ -38,7 +33,7 @@ void stop_words_tokenizer_delete(Fts5Tokenizer *pTok) {
 int stop_words_tokenizer_create(void *pCtx, const char **azArg, int nArg,
                                 Fts5Tokenizer **ppOut) {
   log_debug("\ncreating stop-words tokenizer\n\n");
-  CreateContext *pCreateCtx = (CreateContext *)pCtx;
+  StopWordsTokenizerCreateContext *pCreateCtx = (StopWordsTokenizerCreateContext *)pCtx;
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
   StopWordsTokenizer *pRet;
   const char *zBase = STOP_WORDS_DEFAULT_PARENT_TOKENIZER;

@@ -275,22 +275,28 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
           }
 
           // Register stopwords tokenizer.
-            // TODO: this isn't working properly. Symbols get de-referenced at runtime for some reason. Maybe
-            // TODO: because of the static initializer.
-//          StopWordsTokenizerCreateContext sContext = {ftsApi};
-//          if (ftsApi->xCreateTokenizer(ftsApi, "stopwords", (void *)&sContext, &stop_words_tokenizer, 0) != SQLITE_OK) {
-//            NSString *msg = @"Unable to create stopwords tokenizer";
-//            pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_ERROR messageAsString:msg];
-//            RCTLog(@"%@", msg);
-//           // synonyms_context_delete(synonymsContext);
-//            sqlite3_close(db);
-//            return;
-//          }
+          StopWordsTokenizerCreateContext *stopWordsContext = NULL;
+          stopWordsContext = sqlite3_malloc(sizeof(stopWordsContext));
+          stopWordsContext->pFts5Api = ftsApi;
+          if (ftsApi->xCreateTokenizer(ftsApi, "stopwords", (void *)stopWordsContext, &stop_words_tokenizer, 0) != SQLITE_OK) {
+            NSString *msg = @"Unable to create stopwords tokenizer";
+            pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_ERROR messageAsString:msg];
+            RCTLog(@"%@", msg);
+            sqlite3_free(stopWordsContext);
+            synonyms_context_delete(synonymsContext);
+            sqlite3_close(db);
+            return;
+          }
 
           NSValue *dbPointer = [NSValue valueWithPointer:db];
           NSValue *dbSynonymsContextPointer = [NSValue valueWithPointer:synonymsContext];
-          openDBs[dbfilename] = @{ @"dbPointer": dbPointer, @"dbPath" : dbname, @"dbSynonymsContext" : dbSynonymsContextPointer};
-          NSString *msg = (key != NULL) ? @"Secure database opened" : @"Database opened";
+          NSValue *dbStopWordsContextPointer = [NSValue valueWithPointer:stopWordsContext];
+          openDBs[dbfilename] = @{
+              @"dbPointer": dbPointer,
+              @"dbPath" : dbname,
+              @"dbSynonymsContext" : dbSynonymsContextPointer,
+              @"dbStopWordsContext" : dbStopWordsContextPointer
+          };          NSString *msg = (key != NULL) ? @"Secure database opened" : @"Database opened";
           pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_OK messageAsString: msg];
           RCTLog(@"%@", msg);
         }
@@ -358,7 +364,12 @@ RCT_EXPORT_METHOD(close: (NSDictionary *) options success:(RCTResponseSenderBloc
             synonyms_context_delete(synonymsContext);
           }
 
-          sqlite3_close (db);
+          if (dbInfo[@"dbStopWordsContextPointer"] != nil) {
+            StopWordsTokenizerCreateContext *stopWordsContext = [((NSValue *) dbInfo[@"dbStopWordsContextPointer"]) pointerValue];
+            sqlite3_free(stopWordsContext);
+          }
+
+          sqlite3_close(db);
 
           [openDBs removeObjectForKey:dbFileName];
           pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_OK messageAsString:@"DB closed"];
@@ -705,13 +716,25 @@ RCT_EXPORT_METHOD(executeSql: (NSDictionary *) options success:(RCTResponseSende
     NSDictionary *dbInfo;
     NSString *key;
     sqlite3 *db;
+    SynonymsTokenizerCreateContext *synonymsContext;
+    StopWordsTokenizerCreateContext *stopWordsContext;
 
     /* close db the user forgot */
     for (i=0; i<[keys count]; i++) {
       key = [keys objectAtIndex:i];
       dbInfo = openDBs[key];
       db = [((NSValue *) dbInfo[@"dbPointer"]) pointerValue];
-      sqlite3_close (db);
+      if (dbInfo[@"dbSynonymsContextPointer"] != nil) {
+        synonymsContext = [((NSValue *) dbInfo[@"dbSynonymsContextPointer"]) pointerValue];
+        synonyms_context_delete(synonymsContext);
+      }
+
+      if (dbInfo[@"dbStopWordsContextPointer"] != nil) {
+        stopWordsContext = [((NSValue *) dbInfo[@"dbStopWordsContextPointer"]) pointerValue];
+        sqlite3_free(stopWordsContext);
+      }
+
+      sqlite3_close(db);
     }
 
 #if !__has_feature(objc_arc)
