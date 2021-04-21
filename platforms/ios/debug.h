@@ -1,9 +1,9 @@
 #ifndef DEBUG_H
 #define DEBUG_H
 
-// #define DEBUG
+// #define SQLITE_TOKENIZER_DEBUG
 
-#ifdef DEBUG
+#ifdef SQLITE_TOKENIZER_DEBUG
 #define log_error(...) fprintf(stderr, __VA_ARGS__)
 #define log_debug(...) printf(__VA_ARGS__)
 #else
