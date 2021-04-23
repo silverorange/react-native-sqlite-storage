@@ -16,6 +16,8 @@ typedef struct SynonymsTokenizerCreateContext SynonymsTokenizerCreateContext;
 struct SynonymsTokenizerCreateContext {
   SynonymsHash *pSynonymsHash; /* hash of loaded synonyms */
   fts5_api *pFts5Api;          /* fts5 api */
+  sqlite3 *pDb;                /* database, so we can update the hash table */
+  int nLastUpdated;            /* last updated timestamp */
 };
 
 int synonyms_context_create(sqlite3 *pDb, fts5_api *pFts5Api,

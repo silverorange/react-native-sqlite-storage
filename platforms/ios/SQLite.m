@@ -280,17 +280,16 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
             return;
           }
 
-          static fts5_tokenizer stop_words_tokenizer = {
-            .xCreate = stop_words_tokenizer_create,
-            .xDelete = stop_words_tokenizer_delete,
-            .xTokenize = stop_words_tokenizer_tokenize
+          static fts5_tokenizer stopwords_tokenizer = {
+            .xCreate = stopwords_tokenizer_create,
+            .xDelete = stopwords_tokenizer_delete,
+            .xTokenize = stopwords_tokenizer_tokenize
           };
 
           // Register stopwords tokenizer.
           StopWordsTokenizerCreateContext *stopWordsContext = NULL;
-          stopWordsContext = sqlite3_malloc(sizeof(stopWordsContext));
-          stopWordsContext->pFts5Api = ftsApi;
-          if (ftsApi->xCreateTokenizer(ftsApi, "stopwords", (void *)stopWordsContext, &stop_words_tokenizer, 0) != SQLITE_OK) {
+          stopwords_context_create(db, ftsApi, &stopWordsContext);
+          if (ftsApi->xCreateTokenizer(ftsApi, "stopwords", (void *)stopWordsContext, &stopwords_tokenizer, 0) != SQLITE_OK) {
             NSString *msg = @"Unable to create stopwords tokenizer";
             pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_ERROR messageAsString:msg];
             RCTLog(@"%@", msg);
@@ -308,7 +307,8 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
               @"dbPath" : dbname,
               @"dbSynonymsContext" : dbSynonymsContextPointer,
               @"dbStopWordsContext" : dbStopWordsContextPointer
-          };          NSString *msg = (key != NULL) ? @"Secure database opened" : @"Database opened";
+          };
+          NSString *msg = (key != NULL) ? @"Secure database opened" : @"Database opened";
           pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_OK messageAsString: msg];
           RCTLog(@"%@", msg);
         }
@@ -378,7 +378,7 @@ RCT_EXPORT_METHOD(close: (NSDictionary *) options success:(RCTResponseSenderBloc
 
           if (dbInfo[@"dbStopWordsContextPointer"] != nil) {
             StopWordsTokenizerCreateContext *stopWordsContext = [((NSValue *) dbInfo[@"dbStopWordsContextPointer"]) pointerValue];
-            sqlite3_free(stopWordsContext);
+            stopwords_context_delete(stopWordsContext);
           }
 
           sqlite3_close(db);
@@ -743,7 +743,7 @@ RCT_EXPORT_METHOD(executeSql: (NSDictionary *) options success:(RCTResponseSende
 
       if (dbInfo[@"dbStopWordsContextPointer"] != nil) {
         stopWordsContext = [((NSValue *) dbInfo[@"dbStopWordsContextPointer"]) pointerValue];
-        sqlite3_free(stopWordsContext);
+        stopwords_context_delete(stopWordsContext);
       }
 
       sqlite3_close(db);

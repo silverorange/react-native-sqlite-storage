@@ -1,5 +1,6 @@
 #include "synonyms.h"
 #include "debug.h"
+#include "meta.h"
 #include "utarray.h"
 #include "uthash.h"
 #include <sqlite3.h>
@@ -8,9 +9,9 @@
 
 typedef struct SynonymsTokenizer SynonymsTokenizer;
 struct SynonymsTokenizer {
-  fts5_tokenizer tokenizer;    /* Parent tokenizer module */
-  Fts5Tokenizer *pTokenizer;   /* Parent tokenizer instance */
-  SynonymsHash *pSynonymsHash; /* hash-table of loaded synonyms */
+  fts5_tokenizer tokenizer;                 /* Parent tokenizer module */
+  Fts5Tokenizer *pTokenizer;                /* Parent tokenizer instance */
+  SynonymsTokenizerCreateContext *pContext; /* creation context */
 };
 
 typedef struct SynonymsCallbackContext SynonymsCallbackContext;
@@ -29,9 +30,9 @@ static void debug_hash(SynonymsHash *pSynonymsHash) {
   SynonymsHash *pSynonym, *tmp = NULL;
   HASH_ITER(hh, pSynonymsHash, pSynonym, tmp) {
     char **p = NULL;
-    printf("\n%s\n", pSynonym->zWord);
+    printf("\n  %s\n", pSynonym->zWord);
     while ((p = (char **)utarray_next(pSynonym->zExpansions, p))) {
-      printf(" -> %s\n", *p);
+      printf("   -> %s\n", *p);
     }
   }
 }
@@ -62,15 +63,16 @@ static int synonyms_create_table(sqlite3 *pDb, const char *zTableName) {
   } else {
     sqlite3_snprintf((int)nStatementLength, zStatementSql, zStatementTemplate,
                      zTableName);
-    log_debug("running %s\n", zStatementSql);
+    log_debug("[synonyms] Running SQL \"%s\"\n", zStatementSql);
     rc = sqlite3_exec(pDb, zStatementSql, NULL, NULL, NULL);
     sqlite3_free(zStatementSql);
   }
 
   if (rc != SQLITE_OK) {
-    log_error("Failed to execute statement: %s\n", sqlite3_errmsg(pDb));
+    log_error("[synonyms] Failed to execute statement: %s\n",
+              sqlite3_errmsg(pDb));
   } else {
-    log_debug("created synonym table\n");
+    log_debug("[synonyms] Created \"%s\" table\n", zTableName);
   }
 
   return rc;
@@ -103,17 +105,18 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   sqlite3_snprintf((int)nStatementLength, zStatementSql, zStatementTemplate,
                    zTableName);
 
-  log_debug("running %s\n", zStatementSql);
+  log_debug("[synonyms] Running SQL \"%s\"\n", zStatementSql);
 
   rc = sqlite3_prepare_v2(pDb, zStatementSql, -1, &pStatement, 0);
   if (rc != SQLITE_OK) {
-    log_error("Failed to execute statement: %s\n", sqlite3_errmsg(pDb));
+    log_error("[synonyms] Failed to execute statement: %s\n",
+              sqlite3_errmsg(pDb));
     sqlite3_free(zStatementSql);
     *ppSynonymsHash = pRet;
     return rc;
   }
 
-  log_debug("fetched from synonym table\n");
+  log_debug("[synonyms] Fetched data from \"%s\" table\n", zTableName);
 
   int step = SQLITE_OK;
   while ((step = sqlite3_step(pStatement)) == SQLITE_ROW) {
@@ -139,7 +142,7 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
       utarray_push_back(pSynonym->zExpansions, &zSynonym);
     }
 
-    log_debug("fetched %s -> %s\n", zWord, zSynonym);
+    log_debug("  %s -> %s\n", zWord, zSynonym);
   }
 
   sqlite3_finalize(pStatement);
@@ -148,43 +151,92 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   return rc;
 }
 
+static void synonyms_context_delete_hash(SynonymsHash *pSynonymsHash) {
+  if (pSynonymsHash) {
+    SynonymsHash *pSynonym, *tmp = NULL;
+
+    log_debug("-> freeing synonyms hash\n");
+    HASH_ITER(hh, pSynonymsHash, pSynonym, tmp) {
+      log_debug("  -> freeing expansions array for %s\n", pSynonym->zWord);
+      utarray_free(pSynonym->zExpansions);
+      log_debug("  -> deleting hash entry for %s\n", pSynonym->zWord);
+      HASH_DEL(pSynonymsHash, pSynonym);
+      sqlite3_free(pSynonym->zWord);
+      sqlite3_free(pSynonym);
+    }
+  }
+}
+
+static int synonyms_context_update(SynonymsTokenizerCreateContext *pContext) {
+  int rc = SQLITE_OK;
+  int nLastUpdated = 0;
+
+  rc = meta_needs_update(pContext->pDb, "synonyms", pContext->nLastUpdated,
+                         &nLastUpdated, NULL);
+  if (rc != SQLITE_OK) {
+    log_error("[synonyms] Failed to check synonym cache validity: %s\n",
+              sqlite3_errmsg(pContext->pDb));
+    return rc;
+  }
+
+  if (pContext->nLastUpdated == 0 || nLastUpdated > 0) {
+    log_error("[synonyms] Updating synonyms context\n");
+    synonyms_context_delete_hash(pContext->pSynonymsHash);
+    rc = synonyms_fetch_all_into_hash(pContext->pDb, NULL,
+                                      &(pContext->pSynonymsHash));
+    if (rc == SQLITE_OK) {
+#ifdef DEBUG
+      debug_hash(pContext->pSynonymsHash);
+#endif
+    } else {
+      log_error("[synonyms] Failed to load synonyms: %s\n",
+                sqlite3_errmsg(pContext->pDb));
+    }
+    pContext->nLastUpdated = nLastUpdated;
+  }
+
+  return rc;
+}
+
 int synonyms_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
                             SynonymsTokenizerCreateContext **ppContext) {
-  log_debug("\ncreating synonyms tokenizer context\n\n");
+  log_debug("[synonyms] Creating synonyms context\n");
 
   SynonymsTokenizerCreateContext *pRet = NULL;
   SynonymsHash *pSynonymsHash = NULL;
+  int nLastUpdated = 0;
   int rc = SQLITE_OK;
+
+  rc = meta_create_table(pDb, NULL);
+  if (rc != SQLITE_OK) {
+    log_error("[synonyms] Failed to create tokenizer meta table: %s\n",
+              sqlite3_errmsg(pDb));
+  }
 
   rc = synonyms_create_table(pDb, NULL);
   if (rc != SQLITE_OK) {
-    log_error("Failed to create synonyms table: %s\n", sqlite3_errmsg(pDb));
-  }
-
-  rc = synonyms_fetch_all_into_hash(pDb, NULL, &pSynonymsHash);
-  if (rc == SQLITE_OK) {
-#ifdef DEBUG
-    debug_hash(pSynonymsHash);
-#endif
-  } else {
-    log_error("Failed to load synonyms: %s\n", sqlite3_errmsg(pDb));
+    log_error("[synonyms] Failed to create synonyms table: %s\n",
+              sqlite3_errmsg(pDb));
   }
 
   if (rc == SQLITE_OK) {
     pRet = sqlite3_malloc(sizeof(SynonymsTokenizerCreateContext));
     if (pRet) {
       memset(pRet, 0, sizeof(SynonymsTokenizerCreateContext));
-      pRet->pSynonymsHash = pSynonymsHash;
+
+      pRet->pSynonymsHash = NULL;
       pRet->pFts5Api = pFts5Api;
+      pRet->nLastUpdated = 0;
+      pRet->pDb = pDb;
     } else {
       rc = SQLITE_NOMEM;
     }
   }
 
   if (rc == SQLITE_OK) {
-    log_debug("created synonyms context\n");
+    log_debug("[synonyms] Created synonyms context\n");
   } else {
-    log_error("there was a problem creating the context\n");
+    log_error("[synonyms] There was a problem creating the synonyms context\n");
     if (pRet) {
       synonyms_context_delete(pRet);
     }
@@ -197,27 +249,15 @@ int synonyms_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
 
 void synonyms_context_delete(SynonymsTokenizerCreateContext *pContext) {
   if (pContext) {
-    log_debug("\ndeleting synonyms context\n");
-
-    SynonymsHash *pSynonym, *tmp = NULL;
-
-    log_debug("-> freeing synonyms hash\n");
-    HASH_ITER(hh, pContext->pSynonymsHash, pSynonym, tmp) {
-      log_debug("  -> freeing expansions array for %s\n", pSynonym->zWord);
-      utarray_free(pSynonym->zExpansions);
-      log_debug("  -> deleting hash entry for %s\n", pSynonym->zWord);
-      HASH_DEL(pContext->pSynonymsHash, pSynonym);
-      sqlite3_free(pSynonym->zWord);
-      sqlite3_free(pSynonym);
-    }
-
+    log_debug("[synonyms] Deleting synonyms context\n");
+    synonyms_context_delete_hash(pContext->pSynonymsHash);
     sqlite3_free(pContext);
   }
 }
 
 void synonyms_tokenizer_delete(Fts5Tokenizer *pTok) {
   if (pTok) {
-    log_debug("\ndeleting synonyms tokenizer\n");
+    log_debug("[synonyms] Deleting synonyms tokenizer\n");
     SynonymsTokenizer *p = (SynonymsTokenizer *)pTok;
     if (p->pTokenizer) {
       p->tokenizer.xDelete(p->pTokenizer);
@@ -228,7 +268,7 @@ void synonyms_tokenizer_delete(Fts5Tokenizer *pTok) {
 
 int synonyms_tokenizer_create(void *pCtx, const char **azArg, int nArg,
                               Fts5Tokenizer **ppOut) {
-  log_debug("\ncreating synonyms tokenizer\n\n");
+  log_debug("[synonyms] Creating synonyms tokenizer\n");
 
   SynonymsTokenizerCreateContext *pCreateCtx =
       (SynonymsTokenizerCreateContext *)pCtx;
@@ -241,13 +281,13 @@ int synonyms_tokenizer_create(void *pCtx, const char **azArg, int nArg,
 
   if (nArg > 0) {
     zBase = azArg[0];
-    log_debug("synonyms tokenizer has base %s\n", zBase);
+    log_debug("  synonyms tokenizer has base \"%s\"\n", zBase);
   }
 
   pRet = sqlite3_malloc(sizeof(SynonymsTokenizer));
   if (pRet) {
     memset(pRet, 0, sizeof(SynonymsTokenizer));
-    pRet->pSynonymsHash = pSynonymsHash;
+    pRet->pContext = pCreateCtx;
 
     // set parent tokenizer module
     rc =
@@ -260,18 +300,19 @@ int synonyms_tokenizer_create(void *pCtx, const char **azArg, int nArg,
     int nArg2 = (nArg > 0 ? nArg - 1 : 0);
     const char **azArg2 = (nArg2 ? &azArg[1] : NULL);
 
-    log_debug("creating %s parent tokenizer for synonyms\n", zBase);
+    log_debug("  creating \"%s\" parent tokenizer for synonyms\n", zBase);
     // set parent tokenizer instance, pass through all args
     rc = pRet->tokenizer.xCreate(pUserdata, azArg2, nArg2, &pRet->pTokenizer);
   }
 
   if (rc != SQLITE_OK) {
-    log_debug("there was a problem creating the tokenizer\n");
+    log_error(
+        "[synonyms] There was a problem creating the synonyms tokenizer\n");
     synonyms_tokenizer_delete((Fts5Tokenizer *)pRet);
     pRet = NULL;
   }
 
-  log_debug("created synonyms tokenizer\n");
+  log_debug("  created synonyms tokenizer\n");
   *ppOut = (Fts5Tokenizer *)pRet;
   return rc;
 }
@@ -283,7 +324,7 @@ static int synonyms_tokenize_callback(void *pCtx, int tflags,
 
   // create synonyms in queries
   if (p->flags == FTS5_TOKENIZE_QUERY) {
-    log_debug("Query context, expanding synonyms for %.*s\n", nToken, pToken);
+    log_debug("[synonyms] Expanding synonyms for \"%.*s\"\n", nToken, pToken);
     int rc;
 
     // add source token
@@ -304,7 +345,7 @@ static int synonyms_tokenize_callback(void *pCtx, int tflags,
       SynonymsHash *pSynonym = NULL;
       HASH_FIND_STR(p->pSynonymsHash, zWord, pSynonym);
       if (pSynonym != NULL) {
-        log_debug("found synonyms for %s\n", zWord);
+        log_debug("  found synonyms for \"%s\"\n", zWord);
         char **azExpansions = NULL;
         while ((azExpansions = (char **)utarray_next(pSynonym->zExpansions,
                                                      azExpansions))) {
@@ -331,7 +372,11 @@ int synonyms_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
   SynonymsTokenizer *p = (SynonymsTokenizer *)pTokenizer;
   SynonymsCallbackContext sCtx;
 
-  sCtx.pSynonymsHash = p->pSynonymsHash;
+  if (flags == FTS5_TOKENIZE_QUERY) {
+    synonyms_context_update(p->pContext);
+  }
+
+  sCtx.pSynonymsHash = p->pContext->pSynonymsHash;
   sCtx.xToken = xToken;
   sCtx.pCtx = pCtx;
   sCtx.flags = flags;
