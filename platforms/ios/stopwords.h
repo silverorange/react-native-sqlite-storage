@@ -1,20 +1,28 @@
 #ifndef STOPWORDS_H
 #define STOPWORDS_H
 
-#include "utarray.h"
+#include "uthash.h"
 #include <sqlite3.h>
 
-typedef struct StopWordsTokenizerCreateContext StopWordsTokenizerCreateContext;
-struct StopWordsTokenizerCreateContext {
-  fts5_api *pFts5Api; /* fts5 api */
-  sqlite3 *pDb;       /* database, so we can update the hash table */
-  UT_array *paWords;  /* list of stopwords */
-  int nLastUpdated;   /* last updated date */
+typedef struct StopwordsHash StopwordsHash;
+struct StopwordsHash {
+  char *pWord;
+  int nWordLength;
+  UT_hash_handle hh;
 };
-int stopwords_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
-                             StopWordsTokenizerCreateContext **ppContext);
 
-void stopwords_context_delete(StopWordsTokenizerCreateContext *pContext);
+typedef struct StopwordsTokenizerCreateContext StopwordsTokenizerCreateContext;
+struct StopwordsTokenizerCreateContext {
+  fts5_api *pFts5Api;            /* fts5 api */
+  sqlite3 *pDb;                  /* database, so we can update the hash table */
+  StopwordsHash *pStopwordsHash; /* list of stopwords */
+  int nLastUpdated;              /* last updated date */
+};
+
+int stopwords_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
+                             StopwordsTokenizerCreateContext **ppContext);
+
+void stopwords_context_delete(StopwordsTokenizerCreateContext *pContext);
 
 void stopwords_tokenizer_delete(Fts5Tokenizer *pTok);
 

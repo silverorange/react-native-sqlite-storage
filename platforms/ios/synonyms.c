@@ -25,13 +25,13 @@ struct SynonymsCallbackContext {
 const char *SYNONYMS_DEFAULT_SYNONYMS_TABLE_NAME = "fts5_synonyms";
 const char *SYNONYMS_DEFAULT_PARENT_TOKENIZER = "porter";
 
-#ifdef DEBUG
-static void debug_hash(SynonymsHash *pSynonymsHash) {
+#ifdef SQLITE_TOKENIZER_DEBUG
+static void debug_synonyms_hash(SynonymsHash *pSynonymsHash) {
   SynonymsHash *pSynonym, *tmp = NULL;
   HASH_ITER(hh, pSynonymsHash, pSynonym, tmp) {
     char **p = NULL;
-    printf("\n  %s\n", pSynonym->zWord);
-    while ((p = (char **)utarray_next(pSynonym->zExpansions, p))) {
+    printf("\n  %.*s\n", pSynonym->nWordLength, pSynonym->pWord);
+    while ((p = (char **)utarray_next(pSynonym->pExpansions, p))) {
       printf("   -> %s\n", *p);
     }
   }
@@ -120,11 +120,16 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
 
   int step = SQLITE_OK;
   while ((step = sqlite3_step(pStatement)) == SQLITE_ROW) {
-    char *zWord = strdup((const char *)sqlite3_column_text(pStatement, 0));
+    const char *zTempWord = (const char *)sqlite3_column_text(pStatement, 0);
     char *zSynonym = strdup((const char *)sqlite3_column_text(pStatement, 1));
+    const int nLength = strlen(zTempWord);
+
+    // Get length-delimited string for hash key.
+    char *pWord = sqlite3_malloc(sizeof(char) * nLength);
+    strncpy(pWord, zTempWord, nLength);
 
     SynonymsHash *pSynonym = NULL;
-    HASH_FIND_STR(pRet, zWord, pSynonym);
+    HASH_FIND(hh, pRet, pWord, nLength, pSynonym);
     if (pSynonym == NULL) {
       // New synonym, we need to create a hash entry.
       pSynonym = sqlite3_malloc(sizeof(SynonymsHash));
@@ -132,17 +137,17 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
         rc = SQLITE_NOMEM;
         // TODO break and free everthing, return null
       }
-      pSynonym->zWord = zWord;
-      utarray_new(pSynonym->zExpansions, &ut_str_icd);
-      utarray_push_back(pSynonym->zExpansions, &zSynonym);
-      HASH_ADD_KEYPTR(hh, pRet, pSynonym->zWord, strlen(pSynonym->zWord),
-                      pSynonym);
+      pSynonym->pWord = pWord;
+      pSynonym->nWordLength = nLength;
+      utarray_new(pSynonym->pExpansions, &ut_str_icd);
+      utarray_push_back(pSynonym->pExpansions, &zSynonym);
+      HASH_ADD_KEYPTR(hh, pRet, pSynonym->pWord, nLength, pSynonym);
     } else {
       // Existing synonym, add expansion string.
-      utarray_push_back(pSynonym->zExpansions, &zSynonym);
+      utarray_push_back(pSynonym->pExpansions, &zSynonym);
     }
 
-    log_debug("  %s -> %s\n", zWord, zSynonym);
+    log_debug("  %.*s -> %s\n", nLength, pWord, zSynonym);
   }
 
   sqlite3_finalize(pStatement);
@@ -155,13 +160,15 @@ static void synonyms_context_delete_hash(SynonymsHash *pSynonymsHash) {
   if (pSynonymsHash) {
     SynonymsHash *pSynonym, *tmp = NULL;
 
-    log_debug("-> freeing synonyms hash\n");
+    log_debug("  freeing synonyms hash\n");
     HASH_ITER(hh, pSynonymsHash, pSynonym, tmp) {
-      log_debug("  -> freeing expansions array for %s\n", pSynonym->zWord);
-      utarray_free(pSynonym->zExpansions);
-      log_debug("  -> deleting hash entry for %s\n", pSynonym->zWord);
+      log_debug("  - freeing expansions array for \"%.*s\"\n",
+                pSynonym->nWordLength, pSynonym->pWord);
+      utarray_free(pSynonym->pExpansions);
+      log_debug("    deleting hash entry for \"%.*s\"\n", pSynonym->nWordLength,
+                pSynonym->pWord);
       HASH_DEL(pSynonymsHash, pSynonym);
-      sqlite3_free(pSynonym->zWord);
+      sqlite3_free(pSynonym->pWord);
       sqlite3_free(pSynonym);
     }
   }
@@ -185,8 +192,8 @@ static int synonyms_context_update(SynonymsTokenizerCreateContext *pContext) {
     rc = synonyms_fetch_all_into_hash(pContext->pDb, NULL,
                                       &(pContext->pSynonymsHash));
     if (rc == SQLITE_OK) {
-#ifdef DEBUG
-      debug_hash(pContext->pSynonymsHash);
+#ifdef SQLITE_TOKENIZER_DEBUG
+      debug_synonyms_hash(pContext->pSynonymsHash);
 #endif
     } else {
       log_error("[synonyms] Failed to load synonyms: %s\n",
@@ -203,7 +210,6 @@ int synonyms_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
   log_debug("[synonyms] Creating synonyms context\n");
 
   SynonymsTokenizerCreateContext *pRet = NULL;
-  SynonymsHash *pSynonymsHash = NULL;
   int nLastUpdated = 0;
   int rc = SQLITE_OK;
 
@@ -333,28 +339,20 @@ static int synonyms_tokenize_callback(void *pCtx, int tflags,
     // Don't look for synonyms for stop-words.
     if (nToken > 0 && (nToken > 1 || pToken[0] != '\0')) {
       // Token string may or may not be null-terminated.
-      int nWordSize = pToken[nToken - 1] == '\0' ? nToken : nToken + 1;
-      char *zWord = sqlite3_malloc(nWordSize);
-      zWord = strncpy(zWord, pToken, nToken);
-
-      // If string was not null-terminated, ensure it is. We need a
-      // null-terminated string to do our hash lookup.
-      zWord[nWordSize - 1] = '\0';
+      int nWordLength = pToken[nToken - 1] == '\0' ? nToken - 1 : nToken;
 
       // look up any synonyms
       SynonymsHash *pSynonym = NULL;
-      HASH_FIND_STR(p->pSynonymsHash, zWord, pSynonym);
+      HASH_FIND(hh, p->pSynonymsHash, pToken, nWordLength, pSynonym);
       if (pSynonym != NULL) {
-        log_debug("  found synonyms for \"%s\"\n", zWord);
+        log_debug("  found synonyms for \"%.*s\"\n", nWordLength, pToken);
         char **azExpansions = NULL;
-        while ((azExpansions = (char **)utarray_next(pSynonym->zExpansions,
+        while ((azExpansions = (char **)utarray_next(pSynonym->pExpansions,
                                                      azExpansions))) {
           rc = p->xToken(p->pCtx, FTS5_TOKEN_COLOCATED, *azExpansions,
                          (int)strlen(*azExpansions), iStart, iEnd);
         }
       }
-
-      sqlite3_free(zWord);
     }
 
     return rc;

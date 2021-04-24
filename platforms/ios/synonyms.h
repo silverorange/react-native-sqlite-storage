@@ -7,8 +7,9 @@
 
 typedef struct SynonymsHash SynonymsHash;
 struct SynonymsHash {
-  char *zWord;
-  UT_array *zExpansions;
+  char *pWord;
+  int nWordLength;
+  UT_array *pExpansions;
   UT_hash_handle hh;
 };
 

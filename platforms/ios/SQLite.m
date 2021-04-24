@@ -287,13 +287,13 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
           };
 
           // Register stopwords tokenizer.
-          StopWordsTokenizerCreateContext *stopWordsContext = NULL;
-          stopwords_context_create(db, ftsApi, &stopWordsContext);
-          if (ftsApi->xCreateTokenizer(ftsApi, "stopwords", (void *)stopWordsContext, &stopwords_tokenizer, 0) != SQLITE_OK) {
+          StopwordsTokenizerCreateContext *stopwordsContext = NULL;
+          stopwords_context_create(db, ftsApi, &stopwordsContext);
+          if (ftsApi->xCreateTokenizer(ftsApi, "stopwords", (void *)stopwordsContext, &stopwords_tokenizer, 0) != SQLITE_OK) {
             NSString *msg = @"Unable to create stopwords tokenizer";
             pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_ERROR messageAsString:msg];
             RCTLog(@"%@", msg);
-            sqlite3_free(stopWordsContext);
+            stopwords_context_delete(stopwordsContext);
             synonyms_context_delete(synonymsContext);
             sqlite3_close(db);
             return;
@@ -301,12 +301,12 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
 
           NSValue *dbPointer = [NSValue valueWithPointer:db];
           NSValue *dbSynonymsContextPointer = [NSValue valueWithPointer:synonymsContext];
-          NSValue *dbStopWordsContextPointer = [NSValue valueWithPointer:stopWordsContext];
+          NSValue *dbStopwordsContextPointer = [NSValue valueWithPointer:stopwordsContext];
           openDBs[dbfilename] = @{
               @"dbPointer": dbPointer,
               @"dbPath" : dbname,
               @"dbSynonymsContext" : dbSynonymsContextPointer,
-              @"dbStopWordsContext" : dbStopWordsContextPointer
+              @"dbStopwordsContext" : dbStopwordsContextPointer
           };
           NSString *msg = (key != NULL) ? @"Secure database opened" : @"Database opened";
           pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_OK messageAsString: msg];
@@ -376,9 +376,9 @@ RCT_EXPORT_METHOD(close: (NSDictionary *) options success:(RCTResponseSenderBloc
             synonyms_context_delete(synonymsContext);
           }
 
-          if (dbInfo[@"dbStopWordsContextPointer"] != nil) {
-            StopWordsTokenizerCreateContext *stopWordsContext = [((NSValue *) dbInfo[@"dbStopWordsContextPointer"]) pointerValue];
-            stopwords_context_delete(stopWordsContext);
+          if (dbInfo[@"dbStopwordsContextPointer"] != nil) {
+            StopwordsTokenizerCreateContext *stopwordsContext = [((NSValue *) dbInfo[@"dbStopwordsContextPointer"]) pointerValue];
+            stopwords_context_delete(stopwordsContext);
           }
 
           sqlite3_close(db);
@@ -729,7 +729,7 @@ RCT_EXPORT_METHOD(executeSql: (NSDictionary *) options success:(RCTResponseSende
     NSString *key;
     sqlite3 *db;
     SynonymsTokenizerCreateContext *synonymsContext;
-    StopWordsTokenizerCreateContext *stopWordsContext;
+    StopwordsTokenizerCreateContext *stopwordsContext;
 
     /* close db the user forgot */
     for (i=0; i<[keys count]; i++) {
@@ -741,9 +741,9 @@ RCT_EXPORT_METHOD(executeSql: (NSDictionary *) options success:(RCTResponseSende
         synonyms_context_delete(synonymsContext);
       }
 
-      if (dbInfo[@"dbStopWordsContextPointer"] != nil) {
-        stopWordsContext = [((NSValue *) dbInfo[@"dbStopWordsContextPointer"]) pointerValue];
-        stopwords_context_delete(stopWordsContext);
+      if (dbInfo[@"dbStopwordsContextPointer"] != nil) {
+        stopwordsContext = [((NSValue *) dbInfo[@"dbStopwordsContextPointer"]) pointerValue];
+        stopwords_context_delete(stopwordsContext);
       }
 
       sqlite3_close(db);
