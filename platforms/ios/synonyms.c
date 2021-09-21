@@ -23,7 +23,7 @@ struct SynonymsCallbackContext {
 };
 
 const char *SYNONYMS_DEFAULT_SYNONYMS_TABLE_NAME = "fts5_synonyms";
-const char *SYNONYMS_DEFAULT_PARENT_TOKENIZER = "porter";
+const char *SYNONYMS_DEFAULT_PARENT_TOKENIZER = "phrases";
 
 #ifdef SQLITE_TOKENIZER_DEBUG
 static void debug_synonyms_hash(SynonymsHash *pSynonymsHash) {
@@ -57,7 +57,7 @@ static int synonyms_create_table(sqlite3 *pDb, const char *zTableName) {
   const size_t nStatementLength =
       strlen(zStatementTemplate) + strlen(zTableName) - 1;
 
-  char *zStatementSql = sqlite3_malloc((int)nStatementLength);
+  char *zStatementSql = (char *)sqlite3_malloc((int)nStatementLength);
   if (zStatementSql == NULL) {
     rc = SQLITE_NOMEM;
   } else {
@@ -95,7 +95,7 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   const size_t nStatementLength =
       strlen(zStatementTemplate) + strlen(zTableName) - 1;
 
-  char *zStatementSql = sqlite3_malloc((int)nStatementLength);
+  char *zStatementSql = (char *)sqlite3_malloc((int)nStatementLength);
   if (zStatementSql == NULL) {
     rc = SQLITE_NOMEM;
     *ppSynonymsHash = pRet;
@@ -122,17 +122,17 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   while ((step = sqlite3_step(pStatement)) == SQLITE_ROW) {
     const char *zTempWord = (const char *)sqlite3_column_text(pStatement, 0);
     char *zSynonym = strdup((const char *)sqlite3_column_text(pStatement, 1));
-    const int nLength = strlen(zTempWord);
+    const unsigned int nLength = (unsigned int)strlen(zTempWord);
 
     // Get length-delimited string for hash key.
-    char *pWord = sqlite3_malloc(sizeof(char) * nLength);
+    char *pWord = (char *)sqlite3_malloc(sizeof(char) * nLength);
     strncpy(pWord, zTempWord, nLength);
 
     SynonymsHash *pSynonym = NULL;
     HASH_FIND(hh, pRet, pWord, nLength, pSynonym);
     if (pSynonym == NULL) {
       // New synonym, we need to create a hash entry.
-      pSynonym = sqlite3_malloc(sizeof(SynonymsHash));
+      pSynonym = (SynonymsHash *)sqlite3_malloc(sizeof(SynonymsHash));
       if (pSynonym == NULL) {
         rc = SQLITE_NOMEM;
         // TODO break and free everthing, return null
@@ -210,7 +210,6 @@ int synonyms_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
   log_debug("[synonyms] Creating synonyms context\n");
 
   SynonymsTokenizerCreateContext *pRet = NULL;
-  int nLastUpdated = 0;
   int rc = SQLITE_OK;
 
   rc = meta_create_table(pDb, NULL);
@@ -226,7 +225,9 @@ int synonyms_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
   }
 
   if (rc == SQLITE_OK) {
-    pRet = sqlite3_malloc(sizeof(SynonymsTokenizerCreateContext));
+    pRet = (SynonymsTokenizerCreateContext *)sqlite3_malloc(
+        sizeof(SynonymsTokenizerCreateContext));
+
     if (pRet) {
       memset(pRet, 0, sizeof(SynonymsTokenizerCreateContext));
 
@@ -279,7 +280,6 @@ int synonyms_tokenizer_create(void *pCtx, const char **azArg, int nArg,
   SynonymsTokenizerCreateContext *pCreateCtx =
       (SynonymsTokenizerCreateContext *)pCtx;
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
-  SynonymsHash *pSynonymsHash = pCreateCtx->pSynonymsHash;
   SynonymsTokenizer *pRet;
   const char *zBase = SYNONYMS_DEFAULT_PARENT_TOKENIZER;
   void *pUserdata = 0;
@@ -290,7 +290,7 @@ int synonyms_tokenizer_create(void *pCtx, const char **azArg, int nArg,
     log_debug("  synonyms tokenizer has base \"%s\"\n", zBase);
   }
 
-  pRet = sqlite3_malloc(sizeof(SynonymsTokenizer));
+  pRet = (SynonymsTokenizer *)sqlite3_malloc(sizeof(SynonymsTokenizer));
   if (pRet) {
     memset(pRet, 0, sizeof(SynonymsTokenizer));
     pRet->pContext = pCreateCtx;
@@ -339,7 +339,8 @@ static int synonyms_tokenize_callback(void *pCtx, int tflags,
     // Don't look for synonyms for stop-words.
     if (nToken > 0 && (nToken > 1 || pToken[0] != '\0')) {
       // Token string may or may not be null-terminated.
-      int nWordLength = pToken[nToken - 1] == '\0' ? nToken - 1 : nToken;
+      unsigned int nWordLength =
+          pToken[nToken - 1] == '\0' ? nToken - 1 : nToken;
 
       // look up any synonyms
       SynonymsHash *pSynonym = NULL;

@@ -7,13 +7,19 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		3A3EC59326FA764C000E71CD /* unicode.h in Headers */ = {isa = PBXBuildFile; fileRef = 3A3EC58F26FA764C000E71CD /* unicode.h */; };
+		3A3EC59426FA764C000E71CD /* unicode2.c in Sources */ = {isa = PBXBuildFile; fileRef = 3A3EC59026FA764C000E71CD /* unicode2.c */; };
+		3A3EC59526FA764C000E71CD /* unicode.c in Sources */ = {isa = PBXBuildFile; fileRef = 3A3EC59126FA764C000E71CD /* unicode.c */; };
+		3A3EC59626FA764C000E71CD /* unicode2.h in Headers */ = {isa = PBXBuildFile; fileRef = 3A3EC59226FA764C000E71CD /* unicode2.h */; };
+		3A3EC59926FA7661000E71CD /* phrases.c in Sources */ = {isa = PBXBuildFile; fileRef = 3A3EC59726FA7661000E71CD /* phrases.c */; };
+		3A3EC59A26FA7661000E71CD /* phrases.h in Headers */ = {isa = PBXBuildFile; fileRef = 3A3EC59826FA7661000E71CD /* phrases.h */; };
+		3A3EC59D26FA766D000E71CD /* stopwords.c in Sources */ = {isa = PBXBuildFile; fileRef = 3A3EC59B26FA766D000E71CD /* stopwords.c */; };
+		3A3EC59E26FA766D000E71CD /* stopwords.h in Headers */ = {isa = PBXBuildFile; fileRef = 3A3EC59C26FA766D000E71CD /* stopwords.h */; };
 		3AAB7C132622807B0094BA82 /* fts5.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AAB7C0C2622807A0094BA82 /* fts5.c */; };
 		3AAB7C142622807B0094BA82 /* synonyms.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AAB7C0D2622807A0094BA82 /* synonyms.c */; };
 		3AAB7C152622807B0094BA82 /* debug.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C0E2622807A0094BA82 /* debug.h */; };
 		3AAB7C162622807B0094BA82 /* synonyms.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C0F2622807A0094BA82 /* synonyms.h */; };
 		3AAB7C172622807B0094BA82 /* fts5.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C102622807A0094BA82 /* fts5.h */; };
-		3AAB7C182622807B0094BA82 /* stop-words.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C112622807B0094BA82 /* stop-words.h */; };
-		3AAB7C192622807B0094BA82 /* stop-words.c in Sources */ = {isa = PBXBuildFile; fileRef = 3AAB7C122622807B0094BA82 /* stop-words.c */; };
 		3AAB7C1C262280880094BA82 /* utarray.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C1B262280880094BA82 /* utarray.h */; };
 		3AAB7C1F2622808D0094BA82 /* uthash.h in Headers */ = {isa = PBXBuildFile; fileRef = 3AAB7C1E2622808D0094BA82 /* uthash.h */; };
 		C7DCD6E41BE0295900F3300E /* SQLite.h in Headers */ = {isa = PBXBuildFile; fileRef = C7DCD6E21BE0295900F3300E /* SQLite.h */; };
@@ -34,13 +40,19 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		3A3EC58F26FA764C000E71CD /* unicode.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = unicode.h; sourceTree = "<group>"; };
+		3A3EC59026FA764C000E71CD /* unicode2.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = unicode2.c; sourceTree = "<group>"; };
+		3A3EC59126FA764C000E71CD /* unicode.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = unicode.c; sourceTree = "<group>"; };
+		3A3EC59226FA764C000E71CD /* unicode2.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = unicode2.h; sourceTree = "<group>"; };
+		3A3EC59726FA7661000E71CD /* phrases.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = phrases.c; sourceTree = "<group>"; };
+		3A3EC59826FA7661000E71CD /* phrases.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = phrases.h; sourceTree = "<group>"; };
+		3A3EC59B26FA766D000E71CD /* stopwords.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = stopwords.c; sourceTree = "<group>"; };
+		3A3EC59C26FA766D000E71CD /* stopwords.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = stopwords.h; sourceTree = "<group>"; };
 		3AAB7C0C2622807A0094BA82 /* fts5.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = fts5.c; sourceTree = "<group>"; };
 		3AAB7C0D2622807A0094BA82 /* synonyms.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = synonyms.c; sourceTree = "<group>"; };
 		3AAB7C0E2622807A0094BA82 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = debug.h; sourceTree = "<group>"; };
 		3AAB7C0F2622807A0094BA82 /* synonyms.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = synonyms.h; sourceTree = "<group>"; };
 		3AAB7C102622807A0094BA82 /* fts5.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fts5.h; sourceTree = "<group>"; };
-		3AAB7C112622807B0094BA82 /* stop-words.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "stop-words.h"; sourceTree = "<group>"; };
-		3AAB7C122622807B0094BA82 /* stop-words.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = "stop-words.c"; sourceTree = "<group>"; };
 		3AAB7C1B262280880094BA82 /* utarray.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = utarray.h; sourceTree = "<group>"; };
 		3AAB7C1E2622808D0094BA82 /* uthash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = uthash.h; sourceTree = "<group>"; };
 		C7DCD6E21BE0295900F3300E /* SQLite.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = SQLite.h; sourceTree = "<group>"; };
@@ -71,10 +83,16 @@
 				3AAB7C0E2622807A0094BA82 /* debug.h */,
 				3AAB7C0C2622807A0094BA82 /* fts5.c */,
 				3AAB7C102622807A0094BA82 /* fts5.h */,
-				3AAB7C122622807B0094BA82 /* stop-words.c */,
-				3AAB7C112622807B0094BA82 /* stop-words.h */,
+				3A3EC59726FA7661000E71CD /* phrases.c */,
+				3A3EC59826FA7661000E71CD /* phrases.h */,
+				3A3EC59B26FA766D000E71CD /* stopwords.c */,
+				3A3EC59C26FA766D000E71CD /* stopwords.h */,
 				3AAB7C0D2622807A0094BA82 /* synonyms.c */,
 				3AAB7C0F2622807A0094BA82 /* synonyms.h */,
+				3A3EC59126FA764C000E71CD /* unicode.c */,
+				3A3EC58F26FA764C000E71CD /* unicode.h */,
+				3A3EC59026FA764C000E71CD /* unicode2.c */,
+				3A3EC59226FA764C000E71CD /* unicode2.h */,
 				3AAB7C1B262280880094BA82 /* utarray.h */,
 				3AAB7C1E2622808D0094BA82 /* uthash.h */,
 			);
@@ -106,10 +124,13 @@
 			isa = PBXHeadersBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3AAB7C182622807B0094BA82 /* stop-words.h in Headers */,
 				3AAB7C162622807B0094BA82 /* synonyms.h in Headers */,
+				3A3EC59626FA764C000E71CD /* unicode2.h in Headers */,
+				3A3EC59326FA764C000E71CD /* unicode.h in Headers */,
 				3AAB7C152622807B0094BA82 /* debug.h in Headers */,
+				3A3EC59E26FA766D000E71CD /* stopwords.h in Headers */,
 				3AAB7C1C262280880094BA82 /* utarray.h in Headers */,
+				3A3EC59A26FA7661000E71CD /* phrases.h in Headers */,
 				3AAB7C172622807B0094BA82 /* fts5.h in Headers */,
 				3AAB7C1F2622808D0094BA82 /* uthash.h in Headers */,
 				C7DCD6E41BE0295900F3300E /* SQLite.h in Headers */,
@@ -174,11 +195,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3AAB7C192622807B0094BA82 /* stop-words.c in Sources */,
 				C7DCD7141BE2D5DE00F3300E /* SQLiteResult.m in Sources */,
+				3A3EC59D26FA766D000E71CD /* stopwords.c in Sources */,
+				3A3EC59426FA764C000E71CD /* unicode2.c in Sources */,
 				3AAB7C132622807B0094BA82 /* fts5.c in Sources */,
+				3A3EC59526FA764C000E71CD /* unicode.c in Sources */,
 				C7DCD6E51BE0295A00F3300E /* SQLite.m in Sources */,
 				3AAB7C142622807B0094BA82 /* synonyms.c in Sources */,
+				3A3EC59926FA7661000E71CD /* phrases.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

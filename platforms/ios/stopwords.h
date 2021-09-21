@@ -7,7 +7,7 @@
 typedef struct StopwordsHash StopwordsHash;
 struct StopwordsHash {
   char *pWord;
-  int nWordLength;
+  unsigned int nWordLength;
   UT_hash_handle hh;
 };
 

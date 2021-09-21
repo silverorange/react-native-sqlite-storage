@@ -21,6 +21,8 @@
 #import "fts5.h"
 #import "stopwords.h"
 #import "synonyms.h"
+#import "phrases.h"
+#import "unicode.h"
 
 #import <React/RCTLog.h>
 #import <React/RCTUtils.h>
@@ -31,7 +33,8 @@
  * Copyright (C) 2015-Present Andrzej Porebski
  * Copyright (C) 2012-2015 Chris Brody
  * Copyright (C) 2011 Davide Bertola
- *
+ * Copyright (C) 2021 Michael Gauthier
+
  * This library is available under the terms of the MIT License (2008).
  * See http://opensource.org/licenses/alphabetical for full text.
  */
@@ -136,12 +139,12 @@ RCT_EXPORT_MODULE();
   return self;
 }
 
-- (void)runInBackground:(void (^)())block
+- (void)runInBackground:(void (^)(void))block
 {
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), block);
 }
 
--(id) getDBPath:(NSString *)dbFile at:(NSString *)atkey {
+- (id)getDBPath:(NSString *)dbFile at:(NSString *)atkey {
   if (dbFile == NULL) {
     return NULL;
   }
@@ -260,6 +263,21 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
             return;
           }
 
+          static fts5_tokenizer unicode_tokenizer = {
+            .xCreate = unicode_tokenizer_create,
+            .xDelete = unicode_tokenizer_delete,
+            .xTokenize = unicode_tokenizer_tokenize
+          };
+
+          // Register unicode tokenizer.
+          if (ftsApi->xCreateTokenizer(ftsApi, "unicode", NULL, &unicode_tokenizer, 0) != SQLITE_OK) {
+            NSString *msg = @"Unable to create unicode tokenizer";
+            pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_ERROR messageAsString:msg];
+            RCTLog(@"%@", msg);
+            sqlite3_close(db);
+            return;
+          }
+
           SynonymsTokenizerCreateContext *synonymsContext = NULL;
           synonyms_context_create(db, ftsApi, &synonymsContext);
           RCTLog(@"Created synonyms context.");
@@ -299,14 +317,38 @@ RCT_EXPORT_METHOD(open: (NSDictionary *) options success:(RCTResponseSenderBlock
             return;
           }
 
+          PhrasesTokenizerCreateContext *phrasesContext = NULL;
+          phrases_context_create(db, ftsApi, &phrasesContext);
+          RCTLog(@"Created phrases context.");
+
+          static fts5_tokenizer phrases_tokenizer = {
+            .xCreate = phrases_tokenizer_create,
+            .xDelete = phrases_tokenizer_delete,
+            .xTokenize = phrases_tokenizer_tokenize
+          };
+
+          // Register phrases tokeinzer.
+          if (ftsApi->xCreateTokenizer(ftsApi, "phrases", (void *)phrasesContext, &phrases_tokenizer, 0) != SQLITE_OK) {
+            NSString *msg = @"Unable to create phrases tokenizer";
+            pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_ERROR messageAsString:msg];
+            RCTLog(@"%@", msg);
+            phrases_context_delete(phrasesContext);
+            stopwords_context_delete(stopwordsContext);
+            synonyms_context_delete(synonymsContext);
+            sqlite3_close(db);
+            return;
+          }
+
           NSValue *dbPointer = [NSValue valueWithPointer:db];
           NSValue *dbSynonymsContextPointer = [NSValue valueWithPointer:synonymsContext];
           NSValue *dbStopwordsContextPointer = [NSValue valueWithPointer:stopwordsContext];
+          NSValue *dbPhrasesContextPointer = [NSValue valueWithPointer:phrasesContext];
           openDBs[dbfilename] = @{
               @"dbPointer": dbPointer,
               @"dbPath" : dbname,
               @"dbSynonymsContext" : dbSynonymsContextPointer,
-              @"dbStopwordsContext" : dbStopwordsContextPointer
+              @"dbStopwordsContext" : dbStopwordsContextPointer,
+              @"dbPhrasesContext" : dbPhrasesContextPointer
           };
           NSString *msg = (key != NULL) ? @"Secure database opened" : @"Database opened";
           pluginResult = [SQLiteResult resultWithStatus:SQLiteStatus_OK messageAsString: msg];
@@ -379,6 +421,11 @@ RCT_EXPORT_METHOD(close: (NSDictionary *) options success:(RCTResponseSenderBloc
           if (dbInfo[@"dbStopwordsContextPointer"] != nil) {
             StopwordsTokenizerCreateContext *stopwordsContext = [((NSValue *) dbInfo[@"dbStopwordsContextPointer"]) pointerValue];
             stopwords_context_delete(stopwordsContext);
+          }
+
+          if (dbInfo[@"dbPhrasesContextPointer"] != nil) {
+            PhrasesTokenizerCreateContext *phrasesContext = [((NSValue *) dbInfo[@"dbPhrasesContextPointer"]) pointerValue];
+            phrases_context_delete(phrasesContext);
           }
 
           sqlite3_close(db);
@@ -730,6 +777,7 @@ RCT_EXPORT_METHOD(executeSql: (NSDictionary *) options success:(RCTResponseSende
     sqlite3 *db;
     SynonymsTokenizerCreateContext *synonymsContext;
     StopwordsTokenizerCreateContext *stopwordsContext;
+    PhrasesTokenizerCreateContext *phrasesContext;
 
     /* close db the user forgot */
     for (i=0; i<[keys count]; i++) {
@@ -744,6 +792,11 @@ RCT_EXPORT_METHOD(executeSql: (NSDictionary *) options success:(RCTResponseSende
       if (dbInfo[@"dbStopwordsContextPointer"] != nil) {
         stopwordsContext = [((NSValue *) dbInfo[@"dbStopwordsContextPointer"]) pointerValue];
         stopwords_context_delete(stopwordsContext);
+      }
+
+      if (dbInfo[@"dbPhrasesContextPointer"] != nil) {
+        phrasesContext = [((NSValue *) dbInfo[@"dbPhrasesContextPointer"]) pointerValue];
+        phrases_context_delete(phrasesContext);
       }
 
       sqlite3_close(db);
