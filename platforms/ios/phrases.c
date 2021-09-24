@@ -402,8 +402,8 @@ void phrases_buffer_match(PhrasesCallbackContext *p,
   unsigned int *paStarts;
   unsigned int *paLengths;
 
-  paStarts = sqlite3_malloc(sizeof(int) * iLength);
-  paLengths = sqlite3_malloc(sizeof(int) * iLength);
+  paStarts = (unsigned int *)sqlite3_malloc(sizeof(int) * iLength);
+  paLengths = (unsigned int *)sqlite3_malloc(sizeof(int) * iLength);
 
   // Allocate a single string with the longest phrase we need to check.
   iIndex = phrases_buffer_index(p, -iLength);
@@ -539,10 +539,8 @@ static int phrases_tokenize_callback(void *pCtx, int tflags, const char *pToken,
     // Finally emit the matched root phrase. Split multiple words into
     // separate tokens.
     unsigned int iRootWordStart = 0;
-    for (unsigned int i = 0; i < pMatchedPhrase->nRootLength; i++) {
-      if (pMatchedPhrase->pRoot[i] == ' ' ||
-          i == pMatchedPhrase->nRootLength - 1) {
-
+    for (unsigned int i = 0; i <= pMatchedPhrase->nRootLength; i++) {
+      if (i == pMatchedPhrase->nRootLength || pMatchedPhrase->pRoot[i] == ' ') {
         rc = p->xToken(p->pCtx, tflags, pMatchedPhrase->pRoot + iRootWordStart,
                        i - iRootWordStart, iOriginalStart, iOriginalEnd);
 
