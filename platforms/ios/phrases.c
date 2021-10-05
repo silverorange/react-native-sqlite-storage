@@ -1,11 +1,42 @@
-#include "phrases.h"
+#include <sqlite3ext.h>
+#include <string.h>
+
 #include "debug.h"
 #include "fts5.h"
 #include "meta.h"
+#include "phrases.h"
 #include "uthash.h"
-#include <sqlite3.h>
-#include <stdio.h>
-#include <string.h>
+
+#define PHRASES_DEFAULT_PHRASES_TABLE_NAME "fts5_phrases"
+#define PHRASES_DEFAULT_PARENT_TOKENIZER "snowball"
+
+typedef struct PhrasesBufferEntry PhrasesBufferEntry;
+struct PhrasesBufferEntry {
+  char *pToken;
+  int nToken;
+  int iStart;
+  int iEnd;
+};
+
+typedef struct PhrasesHash PhrasesHash;
+struct PhrasesHash {
+  unsigned int nPhraseLength; /** source phrase character count. */
+  unsigned int nRootLength;   /** root phrase character count. */
+  unsigned int nPhraseWordCount;
+  char *pPhrase; /** source phrase that is collapsed. */
+  char *pRoot;   /** root phrase that is emitted for source phrase. */
+  UT_hash_handle hh;
+};
+
+typedef struct PhrasesTokenizerCreateContext PhrasesTokenizerCreateContext;
+struct PhrasesTokenizerCreateContext {
+  PhrasesHash *pPhrasesHash;    /** hash of loaded phrases */
+  fts5_api *pFts5Api;           /** fts5 api */
+  sqlite3 *pDb;                 /** database, so we can update the hash table */
+  unsigned int nMaxPhraseWords; /** largest number of words in source phrases */
+  int nLastUpdated;             /** last updated timestamp */
+  PhrasesBufferEntry *paBuffer; /** token buffer used during tokenization */
+};
 
 typedef struct PhrasesTokenizer PhrasesTokenizer;
 struct PhrasesTokenizer {
@@ -27,14 +58,11 @@ struct PhrasesCallbackContext {
   unsigned int nMaxPhraseWords;
 };
 
-const char *PHRASES_DEFAULT_PHRASES_TABLE_NAME = "fts5_phrases";
-const char *PHRASES_DEFAULT_PARENT_TOKENIZER = "stopwords";
-
 #ifdef SQLITE_TOKENIZER_DEBUG
 static void debug_phrases_hash(PhrasesHash *pPhrasesHash) {
   PhrasesHash *pPhrasePair, *tmp = NULL;
   HASH_ITER(hh, pPhrasesHash, pPhrasePair, tmp) {
-    printf("  %.*s -> %.*s\n", pPhrasePair->nPhraseLength, pPhrasePair->pPhrase,
+    log_debug("  %.*s -> %.*s\n", pPhrasePair->nPhraseLength, pPhrasePair->pPhrase,
            pPhrasePair->nRootLength, pPhrasePair->pRoot);
   }
 }
@@ -46,7 +74,7 @@ static int phrases_create_table(sqlite3 *pDb, const char *zTableName) {
   // It would be nice in future to get the virtual table name from FTS5 and
   // create TableName_phrases.
   if (zTableName == NULL) {
-    zTableName = PHRASES_DEFAULT_PHRASES_TABLE_NAME;
+    zTableName = (const char *){PHRASES_DEFAULT_PHRASES_TABLE_NAME};
   }
 
   const char *zStatementTemplate = "CREATE TABLE IF NOT EXISTS %s ("
@@ -87,7 +115,7 @@ static int phrases_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   int rc = SQLITE_OK;
 
   if (zTableName == NULL) {
-    zTableName = PHRASES_DEFAULT_PHRASES_TABLE_NAME;
+    zTableName = (const char *){PHRASES_DEFAULT_PHRASES_TABLE_NAME};
   }
 
   const char *zStatementTemplate = "SELECT phrase, root FROM %s ORDER BY root;";
@@ -128,6 +156,10 @@ static int phrases_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
 
     // Get length-delimited string for hash key.
     char *pPhrase = (char *)sqlite3_malloc(sizeof(char) * nPhraseLength);
+    if (pPhrase == NULL) {
+      rc = SQLITE_NOMEM;
+      // TODO break and free everthing, return null
+    }
     strncpy(pPhrase, zTempPhrase, nPhraseLength);
 
     // Get word count of phrase so we can track the maximum phrase length to
@@ -142,6 +174,10 @@ static int phrases_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
 
     // Get length-delimited string for phrase root.
     char *pRoot = (char *)sqlite3_malloc(sizeof(char) * nRootLength);
+    if (pRoot == NULL) {
+      rc = SQLITE_NOMEM;
+      // TODO break and free everthing, return null
+    }
     strncpy(pRoot, zTempRoot, nRootLength);
 
     PhrasesHash *pPhrasePair =
@@ -231,6 +267,10 @@ static int phrases_context_update(PhrasesTokenizerCreateContext *pContext) {
         // Allocate a new buffer based on the max word count.
         pContext->paBuffer = (PhrasesBufferEntry *)sqlite3_malloc(
             sizeof(PhrasesBufferEntry) * (nMaxPhraseWords + 1));
+
+        if (pContext->paBuffer == NULL) {
+          rc = SQLITE_NOMEM;
+        }
       }
     } else {
       log_error("[phrases] Failed to load phrases: %s\n",
@@ -242,8 +282,17 @@ static int phrases_context_update(PhrasesTokenizerCreateContext *pContext) {
   return rc;
 }
 
-int phrases_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
-                           PhrasesTokenizerCreateContext **ppContext) {
+static void phrases_context_delete(PhrasesTokenizerCreateContext *pContext) {
+  if (pContext) {
+    log_debug("[phrases] Deleting phrases context\n");
+    phrases_context_delete_hash(pContext->pPhrasesHash);
+    sqlite3_free(pContext->paBuffer);
+    sqlite3_free(pContext);
+  }
+}
+
+static int phrases_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
+                                  PhrasesTokenizerCreateContext **ppContext) {
   log_debug("[phrases] Creating phrases context\n");
 
   PhrasesTokenizerCreateContext *pRet = NULL;
@@ -291,16 +340,7 @@ int phrases_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
   return rc;
 }
 
-void phrases_context_delete(PhrasesTokenizerCreateContext *pContext) {
-  if (pContext) {
-    log_debug("[phrases] Deleting phrases context\n");
-    phrases_context_delete_hash(pContext->pPhrasesHash);
-    sqlite3_free(pContext->paBuffer);
-    sqlite3_free(pContext);
-  }
-}
-
-void phrases_tokenizer_delete(Fts5Tokenizer *pTok) {
+static void phrases_tokenizer_delete(Fts5Tokenizer *pTok) {
   if (pTok) {
     log_debug("[phrases] Deleting phrases tokenizer\n");
     PhrasesTokenizer *p = (PhrasesTokenizer *)pTok;
@@ -311,15 +351,15 @@ void phrases_tokenizer_delete(Fts5Tokenizer *pTok) {
   }
 }
 
-int phrases_tokenizer_create(void *pCtx, const char **azArg, int nArg,
-                             Fts5Tokenizer **ppOut) {
+static int phrases_tokenizer_create(void *pCtx, const char **azArg, int nArg,
+                                    Fts5Tokenizer **ppOut) {
   log_debug("[phrases] Creating phrases tokenizer\n");
 
   PhrasesTokenizerCreateContext *pCreateCtx =
       (PhrasesTokenizerCreateContext *)pCtx;
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
   PhrasesTokenizer *pRet;
-  const char *zBase = PHRASES_DEFAULT_PARENT_TOKENIZER;
+  const char *zBase = (const char *){PHRASES_DEFAULT_PARENT_TOKENIZER};
   void *pUserdata = 0;
   int rc = SQLITE_OK;
 
@@ -365,7 +405,8 @@ int phrases_tokenizer_create(void *pCtx, const char **azArg, int nArg,
  * @param iOffset offset. A negative offset is counted from the end of the
  * buffer.
  */
-unsigned int phrases_buffer_index(PhrasesCallbackContext *p, int iOffset) {
+static unsigned int phrases_buffer_index(PhrasesCallbackContext *p,
+                                         int iOffset) {
   if (iOffset < 0) {
     iOffset = p->nBufferLength + iOffset;
   }
@@ -377,14 +418,20 @@ unsigned int phrases_buffer_index(PhrasesCallbackContext *p, int iOffset) {
   return (p->iBufferStart + (unsigned int)iOffset) % (p->nMaxPhraseWords + 1);
 }
 
-unsigned int phrases_buffer_next_index(PhrasesCallbackContext *p,
-                                       unsigned int iCurrentIndex) {
+static unsigned int phrases_buffer_next_index(PhrasesCallbackContext *p,
+                                              unsigned int iCurrentIndex) {
   return (iCurrentIndex + 1) % (p->nMaxPhraseWords + 1);
 }
 
-void phrases_buffer_match(PhrasesCallbackContext *p,
-                          PhrasesHash **pMatchedPhrase,
-                          unsigned int *nMatchedPhraseWords) {
+static void phrases_buffer_match(PhrasesCallbackContext *p,
+                                 PhrasesHash **pMatchedPhrase,
+                                 unsigned int *nMatchedPhraseWords) {
+
+  // If there is no phrase matching data, don't do anything.
+  if (p->nMaxPhraseWords == 0) {
+    return;
+  }
+
   // This is the largest number of words we should check in the current buffer.
   // If is the smaller of the current buffer length and the maximum phrase
   // length.
@@ -403,7 +450,9 @@ void phrases_buffer_match(PhrasesCallbackContext *p,
   unsigned int *paLengths;
 
   paStarts = (unsigned int *)sqlite3_malloc(sizeof(int) * iLength);
+  // TODO: check if we got memory or use VLA
   paLengths = (unsigned int *)sqlite3_malloc(sizeof(int) * iLength);
+  // TODO: check if we got memory or use VLA
 
   // Allocate a single string with the longest phrase we need to check.
   iIndex = phrases_buffer_index(p, -iLength);
@@ -415,6 +464,7 @@ void phrases_buffer_match(PhrasesCallbackContext *p,
 
   // Build the string by copying buffer token values into the new string.
   char *pMaxPhrase = (char *)sqlite3_malloc((int)nMaxPhraseLength);
+  // TODO: check if we got memory or use VLA
 
   unsigned int iPos = 0;
   iIndex = phrases_buffer_index(p, -iLength);
@@ -428,9 +478,11 @@ void phrases_buffer_match(PhrasesCallbackContext *p,
     PhrasesBufferEntry *pBufferEntry = &(p->paBuffer[iIndex]);
     strncpy(pMaxPhrase + iPos, pBufferEntry->pToken, pBufferEntry->nToken);
 
-    // Add offsets in reverse order so we can check the shortest phrases first.
-    paStarts[iLength - 1 - i] = iPos;
-    paLengths[iLength - 1 - i] = nMaxPhraseLength - iPos;
+    // Adding offsets in this order means we check longest phrases first. This
+    // means we do more comparisons on average, but means we match long phrases
+    // before shorter sub-phrases which feels more correct.
+    paStarts[i] = iPos;
+    paLengths[i] = nMaxPhraseLength - iPos;
 
     iPos += pBufferEntry->nToken;
     iIndex = phrases_buffer_next_index(p, iIndex);
@@ -449,7 +501,7 @@ void phrases_buffer_match(PhrasesCallbackContext *p,
                 pPhrasePair->nRootLength, pPhrasePair->pRoot);
 
       *pMatchedPhrase = pPhrasePair;
-      *nMatchedPhraseWords = i + 1;
+      *nMatchedPhraseWords = iLength - i;
       break;
     }
   }
@@ -459,7 +511,7 @@ void phrases_buffer_match(PhrasesCallbackContext *p,
   sqlite3_free(pMaxPhrase);
 }
 
-int phrases_buffer_flush(PhrasesCallbackContext *p, int tflags) {
+static int phrases_buffer_flush(PhrasesCallbackContext *p, int tflags) {
   PhrasesBufferEntry *pBufferEntry;
   unsigned int i;
   int rc = SQLITE_OK;
@@ -488,10 +540,19 @@ static int phrases_tokenize_callback(void *pCtx, int tflags, const char *pToken,
 
   int rc = SQLITE_OK;
 
+  // If there is no phrase matching data, don't do anything.
+  if (p->nMaxPhraseWords == 0) {
+    // If this is the end-of-stream sentinel token, ignore it.
+    if ((tflags & FTS5_TOKEN_FINAL) == 0) {
+      rc = p->xToken(p->pCtx, tflags, pToken, nToken, iStart, iEnd);
+    }
+    return rc;
+  }
+
   // If we get to the final token in the source string and there are still
   // tokens in the buffer, we need to flush the buffer. The final token is
   // a marker token so we ignore it.
-  if (tflags & FTS5_TOKEN_FINAL) {
+  if ((tflags & FTS5_TOKEN_FINAL) != 0) {
     return phrases_buffer_flush(p, tflags ^ FTS5_TOKEN_FINAL);
   }
 
@@ -572,15 +633,17 @@ static int phrases_tokenize_callback(void *pCtx, int tflags, const char *pToken,
   return rc;
 }
 
-int phrases_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx, int flags,
-                               const char *pText, int nText,
-                               int (*xToken)(void *, int, const char *,
-                                             int nToken, int iStart,
-                                             int iEnd)) {
+static int phrases_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
+                                      int flags, const char *pText, int nText,
+                                      int (*xToken)(void *, int, const char *,
+                                                    int nToken, int iStart,
+                                                    int iEnd)) {
   PhrasesTokenizer *p = (PhrasesTokenizer *)pTokenizer;
   PhrasesCallbackContext sCtx;
 
-  phrases_context_update(p->pContext);
+  if (phrases_context_update(p->pContext) != SQLITE_OK) {
+    // TODO: handle error
+  }
 
   sCtx.pPhrasesHash = p->pContext->pPhrasesHash;
   sCtx.paBuffer = p->pContext->paBuffer;
@@ -594,4 +657,33 @@ int phrases_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx, int flags,
 
   return p->tokenizer.xTokenize(p->pTokenizer, (void *)&sCtx, flags, pText,
                                 nText, phrases_tokenize_callback);
+}
+
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+
+    int sqlite3_phrases_init(sqlite3 *pDb, char **pzError,
+                             const sqlite3_api_routines *pApi) {
+
+  SQLITE_EXTENSION_INIT2(pApi);
+
+  fts5_api *pFtsApi = fts5_api_from_db(pDb);
+
+  static fts5_tokenizer sTokenizer = {phrases_tokenizer_create,
+                                      phrases_tokenizer_delete,
+                                      phrases_tokenizer_tokenize};
+
+  PhrasesTokenizerCreateContext *pContext;
+  phrases_context_create(pDb, pFtsApi, &pContext);
+
+  if (pFtsApi) {
+    pFtsApi->xCreateTokenizer(pFtsApi, "phrases", (void *)pContext, &sTokenizer,
+                              (void (*)(void *))(&phrases_context_delete));
+    return SQLITE_OK;
+  }
+
+  *pzError = sqlite3_mprintf("Can't find FTS5 extension.");
+
+  return SQLITE_ERROR;
 }

@@ -1,10 +1,29 @@
-#include "stopwords.h"
-#include "debug.h"
-#include "meta.h"
-#include "uthash.h"
-#include <sqlite3.h>
-#include <stdio.h>
+#include <sqlite3ext.h>
 #include <string.h>
+
+#include "debug.h"
+#include "fts5.h"
+#include "meta.h"
+#include "stopwords.h"
+#include "uthash.h"
+
+#define STOPWORDS_DEFAULT_PARENT_TOKENIZER "unicode"
+#define STOPWORDS_DEFAULT_TABLE_NAME "fts5_stopwords"
+
+typedef struct StopwordsHash StopwordsHash;
+struct StopwordsHash {
+  char *pWord;
+  unsigned int nWordLength;
+  UT_hash_handle hh;
+};
+
+typedef struct StopwordsTokenizerCreateContext StopwordsTokenizerCreateContext;
+struct StopwordsTokenizerCreateContext {
+  fts5_api *pFts5Api;            /* fts5 api */
+  sqlite3 *pDb;                  /* database, so we can update the hash table */
+  StopwordsHash *pStopwordsHash; /* list of stopwords */
+  int nLastUpdated;              /* last updated date */
+};
 
 typedef struct StopwordsTokenizer StopwordsTokenizer;
 struct StopwordsTokenizer {
@@ -21,19 +40,16 @@ struct StopwordsCallbackContext {
   StopwordsHash *pStopwordsHash;
 };
 
-const char *STOPWORDS_DEFAULT_PARENT_TOKENIZER = "unicode";
-const char *STOPWORDS_DEFAULT_TABLE_NAME = "fts5_stopwords";
-
 #ifdef SQLITE_TOKENIZER_DEBUG
 static void debug_stopwords_hash(StopwordsHash *pStopwordsHash) {
-  printf("[stopwords] DATA: ");
+  log_debug("[stopwords] DATA: ");
 
   StopwordsHash *pStopword, *tmp = NULL;
   HASH_ITER(hh, pStopwordsHash, pStopword, tmp) {
-    printf("%.*s ", pStopword->nWordLength, pStopword->pWord);
+    log_debug("%.*s ", pStopword->nWordLength, pStopword->pWord);
   }
 
-  printf("\n");
+  log_debug("\n");
 }
 #endif
 
@@ -43,7 +59,7 @@ static int stopwords_create_table(sqlite3 *pDb, const char *zTableName) {
   // It would be nice in future to get the virtual table name from FTS5 and
   // create TableName_synonyms.
   if (zTableName == NULL) {
-    zTableName = STOPWORDS_DEFAULT_TABLE_NAME;
+    zTableName = (const char *){STOPWORDS_DEFAULT_TABLE_NAME};
   }
 
   const char *zStatementTemplate = "CREATE TABLE IF NOT EXISTS %s ("
@@ -83,7 +99,7 @@ static int stopwords_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   int rc = SQLITE_OK;
 
   if (zTableName == NULL) {
-    zTableName = STOPWORDS_DEFAULT_TABLE_NAME;
+    zTableName = (const char *){STOPWORDS_DEFAULT_TABLE_NAME};
   }
 
   const char *zStatementTemplate = "SELECT word FROM %s ORDER BY word;";
@@ -123,6 +139,10 @@ static int stopwords_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
 
     // Get length-delimited string for hash key.
     char *pWord = (char *)sqlite3_malloc(sizeof(char) * nLength);
+    if (pWord == NULL) {
+      rc = SQLITE_NOMEM;
+      // TODO break and free everthing, return null
+    }
     strncpy(pWord, zTempWord, nLength);
 
     StopwordsHash *pStopword =
@@ -192,8 +212,18 @@ static int stopwords_context_update(StopwordsTokenizerCreateContext *pContext) {
   return rc;
 }
 
-int stopwords_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
-                             StopwordsTokenizerCreateContext **ppContext) {
+static void
+stopwords_context_delete(StopwordsTokenizerCreateContext *pContext) {
+  if (pContext) {
+    log_debug("[stopwords] Deleting stopwords context\n");
+    stopwords_context_delete_hash(pContext->pStopwordsHash);
+    sqlite3_free(pContext);
+  }
+}
+
+static int
+stopwords_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
+                         StopwordsTokenizerCreateContext **ppContext) {
   log_debug("[stopwords] Creating stopwords context\n");
 
   StopwordsTokenizerCreateContext *pRet = NULL;
@@ -242,15 +272,7 @@ int stopwords_context_create(sqlite3 *pDb, fts5_api *pFts5Api,
   return rc;
 }
 
-void stopwords_context_delete(StopwordsTokenizerCreateContext *pContext) {
-  if (pContext) {
-    log_debug("[stopwords] Deleting stopwords context\n");
-    stopwords_context_delete_hash(pContext->pStopwordsHash);
-    sqlite3_free(pContext);
-  }
-}
-
-void stopwords_tokenizer_delete(Fts5Tokenizer *pTok) {
+static void stopwords_tokenizer_delete(Fts5Tokenizer *pTok) {
   if (pTok) {
     log_debug("[stopwords] Deleting stopwords tokenizer\n");
     StopwordsTokenizer *p = (StopwordsTokenizer *)pTok;
@@ -261,15 +283,15 @@ void stopwords_tokenizer_delete(Fts5Tokenizer *pTok) {
   }
 }
 
-int stopwords_tokenizer_create(void *pCtx, const char **azArg, int nArg,
-                               Fts5Tokenizer **ppOut) {
+static int stopwords_tokenizer_create(void *pCtx, const char **azArg, int nArg,
+                                      Fts5Tokenizer **ppOut) {
   log_debug("[stopwords] Creating stopwords tokenizer\n");
   StopwordsTokenizerCreateContext *pCreateCtx =
       (StopwordsTokenizerCreateContext *)pCtx;
 
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
   StopwordsTokenizer *pRet;
-  const char *zBase = STOPWORDS_DEFAULT_PARENT_TOKENIZER;
+  const char *zBase = (const char *){STOPWORDS_DEFAULT_PARENT_TOKENIZER};
   void *pUserdata = 0;
   int rc = SQLITE_OK;
 
@@ -341,15 +363,17 @@ static int stopwords_tokenize_callback(void *pCtx, int tflags,
   return p->xToken(p->pCtx, tflags, pToken, nToken, iStart, iEnd);
 }
 
-int stopwords_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
-                                 int flags, const char *pText, int nText,
-                                 int (*xToken)(void *, int, const char *,
-                                               int nToken, int iStart,
-                                               int iEnd)) {
+static int stopwords_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
+                                        int flags, const char *pText, int nText,
+                                        int (*xToken)(void *, int, const char *,
+                                                      int nToken, int iStart,
+                                                      int iEnd)) {
   StopwordsTokenizer *p = (StopwordsTokenizer *)pTokenizer;
   StopwordsCallbackContext sCtx;
 
-  stopwords_context_update(p->pContext);
+  if (stopwords_context_update(p->pContext) != SQLITE_OK) {
+    // TODO
+  };
 
   sCtx.pStopwordsHash = p->pContext->pStopwordsHash;
   sCtx.xToken = xToken;
@@ -358,4 +382,34 @@ int stopwords_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
 
   return p->tokenizer.xTokenize(p->pTokenizer, (void *)&sCtx, flags, pText,
                                 nText, stopwords_tokenize_callback);
+}
+
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+
+    int sqlite3_stopwords_init(sqlite3 *pDb, char **pzError,
+                               const sqlite3_api_routines *pApi) {
+
+  SQLITE_EXTENSION_INIT2(pApi);
+
+  fts5_api *pFtsApi = fts5_api_from_db(pDb);
+
+  static fts5_tokenizer sTokenizer = {stopwords_tokenizer_create,
+                                      stopwords_tokenizer_delete,
+                                      stopwords_tokenizer_tokenize};
+
+  StopwordsTokenizerCreateContext *pContext;
+  stopwords_context_create(pDb, pFtsApi, &pContext);
+
+  if (pFtsApi) {
+    pFtsApi->xCreateTokenizer(pFtsApi, "stopwords", (void *)pContext,
+                              &sTokenizer,
+                              (void (*)(void *))(&stopwords_context_delete));
+    return SQLITE_OK;
+  }
+
+  *pzError = sqlite3_mprintf("Can't find FTS5 extension.");
+
+  return SQLITE_ERROR;
 }

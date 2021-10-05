@@ -1,5 +1,5 @@
 #include <assert.h>
-#include <sqlite3.h>
+#include <sqlite3ext.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -163,7 +163,7 @@ static int so_fts5UnicodeIsException(UnicodeTokenizer *p, int iCode) {
 /*
 ** Delete a "unicode61" tokenizer.
 */
-void unicode_tokenizer_delete(Fts5Tokenizer *pTok) {
+static void unicode_tokenizer_delete(Fts5Tokenizer *pTok) {
   if (pTok) {
     UnicodeTokenizer *p = (UnicodeTokenizer *)pTok;
     sqlite3_free(p->aiException);
@@ -193,8 +193,8 @@ static int so_unicodeSetCategories(UnicodeTokenizer *p, const char *zCat) {
 /*
 ** Create a "unicode61" tokenizer.
 */
-int unicode_tokenizer_create(void *pUnused, const char **azArg, int nArg,
-                             Fts5Tokenizer **ppOut) {
+static int unicode_tokenizer_create(void *pUnused, const char **azArg, int nArg,
+                                    Fts5Tokenizer **ppOut) {
   int rc = SQLITE_OK;      /* Return code */
   UnicodeTokenizer *p = 0; /* New tokenizer object */
 
@@ -211,7 +211,7 @@ int unicode_tokenizer_create(void *pUnused, const char **azArg, int nArg,
 
       p->eRemoveDiacritic = FTS5_REMOVE_DIACRITICS_SIMPLE;
       p->nFold = 64;
-      p->aFold = sqlite3_malloc64(p->nFold * sizeof(char));
+      p->aFold = (char *)sqlite3_malloc64(p->nFold * sizeof(char));
       if (p->aFold == 0) {
         rc = SQLITE_NOMEM;
       }
@@ -271,11 +271,11 @@ static int so_fts5UnicodeIsAlnum(UnicodeTokenizer *p, int iCode) {
           so_fts5UnicodeIsException(p, iCode));
 }
 
-int unicode_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
-                               int iUnused, const char *pText, int nText,
-                               int (*xToken)(void *, int, const char *,
-                                             int nToken, int iStart,
-                                             int iEnd)) {
+static int unicode_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
+                                      int iUnused, const char *pText, int nText,
+                                      int (*xToken)(void *, int, const char *,
+                                                    int nToken, int iStart,
+                                                    int iEnd)) {
   UnicodeTokenizer *p = (UnicodeTokenizer *)pTokenizer;
   int rc = SQLITE_OK;
   unsigned char *a = p->aTokenChar;
@@ -326,7 +326,7 @@ int unicode_tokenizer_tokenize(Fts5Tokenizer *pTokenizer, void *pCtx,
       /* Grow the output buffer so that there is sufficient space to fit the
       ** largest possible utf-8 character.  */
       if (zOut > pEnd) {
-        aFold = sqlite3_malloc64((sqlite3_int64)nFold * 2);
+        aFold = (char *)sqlite3_malloc64((sqlite3_int64)nFold * 2);
         if (aFold == 0) {
           rc = SQLITE_NOMEM;
           goto tokenize_done;
@@ -381,4 +381,29 @@ tokenize_done:
   rc = xToken(pCtx, FTS5_TOKEN_FINAL, "", 0, nText, nText);
 
   return rc;
+}
+
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+
+    int sqlite3_unicode_init(sqlite3 *pDb, char **pzError,
+                             const sqlite3_api_routines *pApi) {
+
+  SQLITE_EXTENSION_INIT2(pApi);
+
+  fts5_api *pFtsApi = fts5_api_from_db(pDb);
+
+  static fts5_tokenizer sTokenizer = {unicode_tokenizer_create,
+                                      unicode_tokenizer_delete,
+                                      unicode_tokenizer_tokenize};
+
+  if (pFtsApi) {
+    pFtsApi->xCreateTokenizer(pFtsApi, "unicode", NULL, &sTokenizer, NULL);
+    return SQLITE_OK;
+  }
+
+  *pzError = sqlite3_mprintf("Can't find FTS5 extension.");
+
+  return SQLITE_ERROR;
 }
