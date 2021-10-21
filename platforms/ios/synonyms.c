@@ -8,8 +8,8 @@
 #include "utarray.h"
 #include "uthash.h"
 
-#define SYNONYMS_DEFAULT_SYNONYMS_TABLE_NAME "fts5_synonyms"
 #define SYNONYMS_DEFAULT_PARENT_TOKENIZER "phrases"
+#define SYNONYMS_DEFAULT_TABLE_NAME "fts5_synonyms"
 
 typedef struct SynonymsHash SynonymsHash;
 struct SynonymsHash {
@@ -61,7 +61,7 @@ static int synonyms_create_table(sqlite3 *pDb, const char *zTableName) {
   // It would be nice in future to get the virtual table name from FTS5 and
   // create TableName_synonyms.
   if (zTableName == NULL) {
-    zTableName = (const char *){SYNONYMS_DEFAULT_SYNONYMS_TABLE_NAME};
+    zTableName = (const char *)SYNONYMS_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate = "CREATE TABLE IF NOT EXISTS %s ("
@@ -102,7 +102,7 @@ static int synonyms_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   int rc = SQLITE_OK;
 
   if (zTableName == NULL) {
-    zTableName = (const char *){SYNONYMS_DEFAULT_SYNONYMS_TABLE_NAME};
+    zTableName = (const char *)SYNONYMS_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate =
@@ -298,7 +298,7 @@ static int synonyms_tokenizer_create(void *pCtx, const char **azArg, int nArg,
       (SynonymsTokenizerCreateContext *)pCtx;
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
   SynonymsTokenizer *pRet;
-  const char *zBase = (const char *){SYNONYMS_DEFAULT_PARENT_TOKENIZER};
+  const char *zBase = (const char *)SYNONYMS_DEFAULT_PARENT_TOKENIZER;
   void *pUserdata = 0;
   int rc = SQLITE_OK;
 

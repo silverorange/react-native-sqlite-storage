@@ -38,8 +38,10 @@ static int is_valid_language(const char *name) {
 
 static int process_list_languages(const char **azArg, int nArg, int *nextArg,
                                   SnowballCallbackContext *snow) {
+  const char **azLanguages;
+  const char *azDefaultLanguages[] = {SNOWBALL_DEFAULT_LANGUAGE};
   int i;
-  log_debug("[snowball] language is %s\n", azArg[0]);
+
   // find the position of the last language in the list
   for (i = 0; i < nArg; i++) {
     if (!is_valid_language(azArg[i])) {
@@ -48,29 +50,29 @@ static int process_list_languages(const char **azArg, int nArg, int *nextArg,
   }
 
   *nextArg = i;
-  int languages = i;
+  int nLanguages = i;
 
-  log_debug("[snowball] langauges %d, next arg %d\n", languages, i);
-
-  if (languages == 0) {
-    azArg = (const char *[]){SNOWBALL_DEFAULT_LANGUAGE};
-    languages = 1;
+  if (nLanguages == 0) {
+    azLanguages = azDefaultLanguages;
+    nLanguages = 1;
+  } else {
+    azLanguages = azArg;
   }
 
-  log_debug("[snowball] language is %s\n", azArg[0]);
+  log_debug("[snowball] language is %s\n", azLanguages[0]);
 
   snow->stemmers = (struct sb_stemmer **)sqlite3_malloc(
-      (languages + 1) * sizeof(struct sb_stemmer *));
+      (nLanguages + 1) * sizeof(struct sb_stemmer *));
 
   if (!snow->stemmers) {
     return SQLITE_NOMEM;
   }
 
-  snow->stemmers[languages] = NULL; // terminate the list
+  snow->stemmers[nLanguages] = NULL; // terminate the list
 
-  for (i = 0; i < languages; i++) {
+  for (i = 0; i < nLanguages; i++) {
     // UTF-8 encoding is used by default.
-    snow->stemmers[i] = sb_stemmer_new(azArg[i], NULL);
+    snow->stemmers[i] = sb_stemmer_new(azLanguages[i], NULL);
     if (!snow->stemmers[i]) {
       return SQLITE_ERROR;
     }
@@ -107,15 +109,12 @@ static int snowball_tokenizer_create(void *pCtx, const char **azArg, int nArg,
   int rc = SQLITE_OK;
   int nextArg;
   const char *zBase = (const char *){SNOWBALL_DEFAULT_PARENT_TOKENIZER};
-  log_debug("[snowball] inited vars\n");
   result = (SnowballCallbackContext *)sqlite3_malloc(
       sizeof(SnowballCallbackContext));
 
   if (result) {
     memset(result, 0, sizeof(SnowballCallbackContext));
-    log_debug("[snowball] cleared memory\n");
     rc = process_list_languages(azArg, nArg, &nextArg, result);
-    log_debug("[snowball] got language list\n");
   } else {
     rc = SQLITE_NOMEM;
   }
@@ -124,12 +123,9 @@ static int snowball_tokenizer_create(void *pCtx, const char **azArg, int nArg,
     if (nArg > nextArg) {
       zBase = azArg[nextArg];
     }
-    log_debug("[snowball] got base tokenizer '%s'\n", zBase);
-
     rc = pApi->xFindTokenizer(pApi, zBase, &pUserdata,
                               &result->nextTokenizerModule);
   }
-  log_debug("[snowball] assigned base tokenizer '%s'\n", zBase);
 
   if (rc == SQLITE_OK) {
     int nArg2 = (nArg > nextArg + 1 ? nArg - nextArg - 1 : 0);

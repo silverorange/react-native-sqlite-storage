@@ -59,7 +59,7 @@ static int stopwords_create_table(sqlite3 *pDb, const char *zTableName) {
   // It would be nice in future to get the virtual table name from FTS5 and
   // create TableName_synonyms.
   if (zTableName == NULL) {
-    zTableName = (const char *){STOPWORDS_DEFAULT_TABLE_NAME};
+    zTableName = (const char *)STOPWORDS_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate = "CREATE TABLE IF NOT EXISTS %s ("
@@ -99,7 +99,7 @@ static int stopwords_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   int rc = SQLITE_OK;
 
   if (zTableName == NULL) {
-    zTableName = (const char *){STOPWORDS_DEFAULT_TABLE_NAME};
+    zTableName = (const char *)STOPWORDS_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate = "SELECT word FROM %s ORDER BY word;";
@@ -291,7 +291,7 @@ static int stopwords_tokenizer_create(void *pCtx, const char **azArg, int nArg,
 
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
   StopwordsTokenizer *pRet;
-  const char *zBase = (const char *){STOPWORDS_DEFAULT_PARENT_TOKENIZER};
+  const char *zBase = (const char *)STOPWORDS_DEFAULT_PARENT_TOKENIZER;
   void *pUserdata = 0;
   int rc = SQLITE_OK;
 

@@ -7,8 +7,8 @@
 #include "phrases.h"
 #include "uthash.h"
 
-#define PHRASES_DEFAULT_PHRASES_TABLE_NAME "fts5_phrases"
 #define PHRASES_DEFAULT_PARENT_TOKENIZER "snowball"
+#define PHRASES_DEFAULT_TABLE_NAME "fts5_phrases"
 
 typedef struct PhrasesBufferEntry PhrasesBufferEntry;
 struct PhrasesBufferEntry {
@@ -74,7 +74,7 @@ static int phrases_create_table(sqlite3 *pDb, const char *zTableName) {
   // It would be nice in future to get the virtual table name from FTS5 and
   // create TableName_phrases.
   if (zTableName == NULL) {
-    zTableName = (const char *){PHRASES_DEFAULT_PHRASES_TABLE_NAME};
+    zTableName = (const char *)PHRASES_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate = "CREATE TABLE IF NOT EXISTS %s ("
@@ -115,7 +115,7 @@ static int phrases_fetch_all_into_hash(sqlite3 *pDb, const char *zTableName,
   int rc = SQLITE_OK;
 
   if (zTableName == NULL) {
-    zTableName = (const char *){PHRASES_DEFAULT_PHRASES_TABLE_NAME};
+    zTableName = (const char *)PHRASES_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate = "SELECT phrase, root FROM %s ORDER BY root;";
@@ -359,7 +359,7 @@ static int phrases_tokenizer_create(void *pCtx, const char **azArg, int nArg,
       (PhrasesTokenizerCreateContext *)pCtx;
   fts5_api *pFts5Api = pCreateCtx->pFts5Api;
   PhrasesTokenizer *pRet;
-  const char *zBase = (const char *){PHRASES_DEFAULT_PARENT_TOKENIZER};
+  const char *zBase = (const char *)PHRASES_DEFAULT_PARENT_TOKENIZER;
   void *pUserdata = 0;
   int rc = SQLITE_OK;
 

@@ -14,7 +14,7 @@ int meta_needs_update(sqlite3 *pDb, const char *zName, int nLastUpdate,
   int nRet = 0;
 
   if (zTableName == NULL) {
-    zTableName = (const char *){META_DEFAULT_TABLE_NAME};
+    zTableName = (const char *)META_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate = "SELECT ? < date AS needs_update, date "
@@ -91,7 +91,7 @@ int meta_create_table(sqlite3 *pDb, const char *zTableName) {
   int rc = SQLITE_OK;
 
   if (zTableName == NULL) {
-    zTableName = (const char *){META_DEFAULT_TABLE_NAME};
+    zTableName = (const char *)META_DEFAULT_TABLE_NAME;
   }
 
   const char *zStatementTemplate = "CREATE TABLE IF NOT EXISTS %s ("
