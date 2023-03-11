@@ -1,4 +1,4 @@
-#include <libstemmer.h>
+#include "libstemmer.h"
 #include <sqlite3ext.h>
 #include <string.h>
 
