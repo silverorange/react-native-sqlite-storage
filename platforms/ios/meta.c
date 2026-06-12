@@ -4,7 +4,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#define META_DEFAULT_TABLE_NAME "fts5_meta"
+#define META_DEFAULT_TABLE_NAME "TableMeta"
 
 // if last updated time < database update time, return nDate, otherwise 0
 int meta_needs_update(sqlite3 *pDb, const char *zName, int nLastUpdate,
